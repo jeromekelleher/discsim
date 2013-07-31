@@ -2,7 +2,7 @@
 CFLAGS=-g -Wall -Wextra
 LDFLAGS=-lm -lgsl -lgslcblas
 MAIN_LDFLAGS=${LDFLAGS} -lconfig 
-ALL_SRC=sim.c 
+ALL_SRC=sim.c util.c avl.c
 #util.c kdtree.c torus.c
 CC=cc
 

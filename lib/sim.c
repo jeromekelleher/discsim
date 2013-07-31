@@ -17,6 +17,9 @@
 ** along with ercs.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "sim.h"
+#include "util.h"
+
 
 #include <math.h>
 #include <stdio.h>
@@ -25,45 +28,16 @@
 #include <time.h>
 #include <sys/times.h>
 #include <unistd.h>
-#include <stdint.h>
 
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_statistics_double.h>
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
+
+/*
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_statistics_double.h>
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_histogram.h>
-
-static void
-fatal_error(const char *message)
-{
-    fprintf(stderr, "%s\n", message);
-    exit(1);
-}
-
-void *
-xmalloc(size_t size)
-{
-    register void *value = malloc(size);
-    if (value == NULL) {
-        fatal_error("virtual memory exhausted");
-    }
-    return value;
-}
-
-void *
-xcalloc(size_t count, size_t eltsize)
-{
-    register void *value = calloc(count, eltsize);
-    if (value == NULL) {
-        fatal_error("virtual memory exhausted");
-        abort();
-    }
-    return value;
-}
-
+*/
 static int 
 avl_set_compare(const void *pa, const void *pb)
 {
@@ -399,7 +373,7 @@ sim_get_disc_pixels(sim_t *self, double *z)
  * using the equilibrium prediction, using the specified fraction of headroom
  * over this estimate.
  */
-static void
+void
 sim_set_max_occupancy(sim_t *self, double headroom)
 {
     double delta = equilibrium_density(self->nu, self->u);
@@ -409,14 +383,15 @@ sim_set_max_occupancy(sim_t *self, double headroom)
 
 }
 
-static void
+void
 sim_alloc(sim_t *self)
 {
     unsigned int j, k, max;
     double *b;
     self->N = self->L / self->s;
     if (fmod(self->L, self->s) != 0.0) {
-        fatal_error("L must be a multiple of s");
+        printf("FIXME!!!\n");
+        //fatal_error("L must be a multiple of s");
     }
     self->rng = gsl_rng_alloc(gsl_rng_default);
     gsl_rng_set(self->rng, self->random_seed);
@@ -510,23 +485,17 @@ sim_alloc(sim_t *self)
             b[j] = beta(k, j, self->u);
         }
         self->beta_distributions[k] = gsl_ran_discrete_preproc(max + 1, b);
+        printf("FIXME!!\n");
         if (self->beta_distributions[k] == NULL) {
-            fatal_error("Out of memory\n");
+            
+            //fatal_error("Out of memory\n");
         }
     }
     free(b);
-    /* allocate counter matrices */
-    self->total_C_size = xmalloc(gsl_pow_2(self->N) * sizeof(unsigned long));
-    self->total_S_size = xmalloc(gsl_pow_2(self->N) * sizeof(unsigned long));
-    self->total_G_size = xmalloc(gsl_pow_2(self->N) * sizeof(unsigned long));
-    self->total_H_size = xmalloc(gsl_pow_2(self->N) * sizeof(unsigned long));
-    self->total_E_size = xmalloc(gsl_pow_2(self->N) * sizeof(unsigned long));
-    self->hit_rate_distribution = gsl_histogram_alloc(100);
-    gsl_histogram_set_ranges_uniform(self->hit_rate_distribution, 0.0, 100.0);
 
 }
 
-static void
+void
 sim_free(sim_t *self)
 {
     unsigned int j;
@@ -560,13 +529,6 @@ sim_free(sim_t *self)
         gsl_ran_discrete_free(self->beta_distributions[j]);
     }
     free(self->beta_distributions);
-    /* counters */
-    free(self->total_S_size);
-    free(self->total_C_size);
-    free(self->total_G_size);
-    free(self->total_H_size);
-    free(self->total_E_size);
-    gsl_histogram_free(self->hit_rate_distribution);
 }
 
 /* TODO These function names are inconsistent -  the free functions keep 
@@ -577,8 +539,9 @@ static avl_node_t *
 sim_alloc_set_node(sim_t *self, uint64_t value) 
 {
     avl_node_t *node = NULL;
+    printf("FIXME!!");
     if (self->avl_set_node_heap_top < 0) {
-        fatal_error("Out of set space");
+        //fatal_error("Out of set space");
     }
     node = self->avl_set_node_heap[self->avl_set_node_heap_top];
     self->avl_set_node_heap_top--;
@@ -597,8 +560,9 @@ static individual_t *
 sim_alloc_individual(sim_t *self) 
 {
     individual_t *ind;
+    printf("FIXME!!");
     if (self->individual_heap_top < 0) {
-        fatal_error("Out of individual space");
+        //fatal_error("Out of individual space");
     }
     ind = self->individual_heap[self->individual_heap_top];
     avl_init_tree(&ind->ancestry, avl_int_map_compare, NULL);
@@ -618,8 +582,9 @@ sim_alloc_set_map_node(sim_t *self, unsigned int key)
 {
     avl_node_t *node = NULL;
     set_map_value_t *v;
+    printf("FIXME!!");
     if (self->avl_set_map_node_heap_top < 0) {
-        fatal_error("Out of set_map space");
+        //fatal_error("Out of set_map space");
     }
     node = self->avl_set_map_node_heap[self->avl_set_map_node_heap_top];
     self->avl_set_map_node_heap_top--;
@@ -641,8 +606,9 @@ sim_alloc_int_map_node(sim_t *self, unsigned int key, unsigned int value)
 {
     avl_node_t *node = NULL;
     int_map_value_t *v;
+    printf("FIXME!!");
     if (self->avl_int_map_node_heap_top < 0) {
-        fatal_error("Out of int_map space");
+    //    fatal_error("Out of int_map space");
     }
     node = self->avl_int_map_node_heap[self->avl_int_map_node_heap_top];
     self->avl_int_map_node_heap_top--;
@@ -776,7 +742,7 @@ sim_remove_individual(sim_t *self, individual_t *ind)
 /*
  * Sets up the simulation so that we can enter the main loop.
  */
-static void
+void
 sim_initialise(sim_t *self)
 {
     unsigned int j, k, l, pixel;
@@ -812,18 +778,9 @@ sim_initialise(sim_t *self)
     self->coalesced_loci[0] = 0;
     self->t = 0.0;
     self->ancestral_material = self->n * self->m;
-    /* initialise counters */
-    self->num_jumps = 0;
-    self->num_generated_events = 0;
-    for (j = 0; j < gsl_pow_2(self->N); j++) {
-        self->total_E_size[j] = 0;
-        self->total_H_size[j] = 0;
-        self->total_S_size[j] = 0;
-        self->total_C_size[j] = 0;
-        self->total_G_size[j] = 0;
-        
-    }
 }
+
+
 static double 
 sim_ubar(sim_t *self, unsigned int n) 
 {
@@ -929,7 +886,7 @@ sim_generate_parents(sim_t *self, unsigned int C_size)
         
 }
 
-static void 
+void 
 sim_run(sim_t *self)
 {
     unsigned int j, k, pixel, max_occupancy, occupancy, pixel_count, v[2];
@@ -944,8 +901,9 @@ sim_run(sim_t *self)
     avl_node_t *node;
     set_map_value_t *smv, smv_search;
     individual_t *ind;
-    while (self->ancestral_material > self->m && self->t < self->max_time
-            && self->num_jumps < self->max_jumps) {
+    while (self->ancestral_material > self->m && self->t < self->max_time) {
+        printf("FIXME HERE!\n!");
+        //    && self->num_jumps < self->max_jumps) {
         //sim_print_state(self, 0);
         Lambda = 0.0;
         max_occupancy = 0;
@@ -1020,7 +978,6 @@ sim_run(sim_t *self)
             if (avl_count(&ind->ancestry) == 0) {
                 sim_free_individual(self, ind);
             } else {
-                self->total_G_size[pixel]++;
                 random_point_torus_disc(ind->location, z, self->r, self->L, 
                         self->rng);
                 sim_add_individual(self, ind);

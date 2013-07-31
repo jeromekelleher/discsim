@@ -1,28 +1,29 @@
 /*
 ** Copyright (C) 2013 Jerome Kelleher <jerome.kelleher@ed.ac.uk>
 **  
-** This file is part of ercs.
+** This file is part of sim.
 ** 
-** ercs is free software: you can redistribute it and/or modify
+** sim is free software: you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License as published by
 ** the Free Software Foundation, either version 3 of the License, or
 ** (at your option) any later version.
 ** 
-** ercs is distributed in the hope that it will be useful,
+** sim is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
 ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ** GNU General Public License for more details.
 ** 
 ** You should have received a copy of the GNU General Public License
-** along with ercs.  If not, see <http://www.gnu.org/licenses/>.
+** along with sim.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 /* 
- * Simple command line front end for the ercs code. This is intended 
+ * Simple command line front end for the sim code. This is intended 
  * for development purposes only!
  */
 
 #include "sim.h"
+#include "util.h"
 
 #include <limits.h>
 #include <string.h>
@@ -45,16 +46,16 @@ static void
 fatal_error(const char *msg, ...)
 {
     va_list argp;
-    fprintf(stderr, "ercs:");
+    fprintf(stderr, "sim:");
     va_start(argp, msg);
     vfprintf(stderr, msg, argp);
     va_end(argp);
     fprintf(stderr, "\n");
     exit(EXIT_FAILURE);
 }
-
+/*
 static void
-read_recombination_probabilities(ercs_t *self, config_t *config)
+read_recombination_probabilities(sim_t *self, config_t *config)
 {
     int j;
     int m;
@@ -80,12 +81,12 @@ read_recombination_probabilities(ercs_t *self, config_t *config)
     }
     self->recombination_probabilities[m - 1] = 0.0;
 }
+*/
 
 
-
-
+/*
 static void
-read_sample(ercs_t *self, config_t *config)
+read_sample(sim_t *self, config_t *config)
 {
     int j;
     config_setting_t *s;
@@ -116,9 +117,10 @@ read_sample(ercs_t *self, config_t *config)
         self->sample[2 * j + 1] = config_setting_get_float_elem(s, 1);
     }
 }
-
+*/
+/*
 static void
-read_events(ercs_t *self, config_t *config)
+read_events(sim_t *self, config_t *config)
 {
     double u, r, rate, theta, alpha; 
     int j;
@@ -197,9 +199,8 @@ read_events(ercs_t *self, config_t *config)
     }
 }
 
-
 static void 
-read_config(ercs_t *self, const char *filename)
+read_config(sim_t *self, const char *filename)
 {
     int err;
     libconfig_int tmp;
@@ -245,38 +246,40 @@ read_config(ercs_t *self, const char *filename)
         fatal_error("max_time is a required parameter");
     }
     read_events(self, config);    
-    read_sample(self, config);
-    read_recombination_probabilities(self, config); 
+    //read_sample(self, config);
+    //read_recombination_probabilities(self, config); 
 
     config_destroy(config);
     free(config);
 }
 
+*/
 
 
 int
 main(int argc, char** argv)
 {
-    int ret;
-    int not_done = 1;
+    //int ret;
+    //int not_done = 1;
     sim_t *self = xcalloc(1, sizeof(sim_t));
+    printf("%s", argv[0]);  // REMOVE
     if (argc != 2) {
-        fatal_error("usage: ercs <configuration file>");
+        fatal_error("usage: sim <configuration file>");
     }
-    read_config(self, argv[1]); 
+    //read_config(self, argv[1]); 
     /*
-    ret = ercs_initialise(self);
+    ret = sim_initialise(self);
     ERCS_ERROR_CHECK(ret, out); 
     while (not_done) {
-        ret = ercs_simulate(self, UINT_MAX);
+        ret = sim_simulate(self, UINT_MAX);
         ERCS_ERROR_CHECK(ret, out);
         not_done = ret == ERCS_SIM_NOT_DONE;
     }
-    ercs_print_state(self);
+    sim_print_state(self);
    
 out:
     if (ret < 0) {
-        printf("Error occured: %d: %s\n", ret, ercs_error_str(ret));
+        printf("Error occured: %d: %s\n", ret, sim_error_str(ret));
     }
     */
     sim_free(self);

@@ -17,6 +17,10 @@
 ** along with ercs.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <stdint.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
 
 #include "avl.h"
 
@@ -99,4 +103,10 @@ typedef struct {
     unsigned int *coalesced_loci;
 } sim_t;
 
+
+void sim_free(sim_t *self);
+void sim_set_max_occupancy(sim_t *self, double headroom);
+void sim_alloc(sim_t *self);
+void sim_initialise(sim_t *self);
+void sim_run(sim_t *self);
 
