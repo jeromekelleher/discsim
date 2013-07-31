@@ -18,3 +18,85 @@
 */
 
 
+#include "avl.h"
+
+typedef struct {
+    double location[2];
+    avl_tree_t ancestry;
+} individual_t;
+
+typedef struct {
+    unsigned int key;
+    avl_tree_t value;
+} set_map_value_t;
+
+typedef struct {
+    unsigned int key;
+    unsigned int value;
+} int_map_value_t;
+
+typedef struct {
+    unsigned int n;
+    unsigned int m;
+    unsigned int nu;
+    double L;
+    double s;
+    double r;
+    double u;
+    double lambda;
+    double *X;
+    double rho;
+    unsigned long random_seed;
+    unsigned int max_sample_size;
+    unsigned int max_occupancy;
+    double max_time;
+    double beta_threshold;
+    /* algorithm state */
+    unsigned int max_disc_pixels;
+    unsigned int N;
+    gsl_rng *rng;
+    avl_tree_t *P;
+    avl_tree_t Q;
+    double t;
+    unsigned int sample_size;
+    unsigned int ancestral_material;
+    double *ubar;
+    gsl_ran_discrete_t **beta_distributions;
+    /* set memory */ 
+    uint64_t *avl_set_value_mem;
+    avl_node_t *avl_set_node_mem;
+    avl_node_t **avl_set_node_heap;
+    int avl_set_node_heap_top;
+    /* individual memory */ 
+    individual_t *individual_mem;
+    individual_t **individual_heap;
+    int individual_heap_top;
+    /* set map memory */ 
+    set_map_value_t *avl_set_map_value_mem;
+    avl_node_t *avl_set_map_node_mem;
+    avl_node_t **avl_set_map_node_heap;
+    int avl_set_map_node_heap_top;
+    /* int map memory */ 
+    int_map_value_t *avl_int_map_value_mem;
+    avl_node_t *avl_int_map_node_mem;
+    avl_node_t **avl_int_map_node_heap;
+    int avl_int_map_node_heap_top;
+    /* buffers */
+    unsigned int *pixel_buffer;
+    double *probability_buffer;
+    individual_t **intersected_buffer;
+    individual_t **child_buffer;
+    individual_t **parent_buffer;
+    /* ancestry */
+    int **pi;
+    double **tau;
+    int *eta;
+    /* memory for the large ancestry blocks */
+    int *pi_mem;
+    double *tau_mem;
+    /* Map to keep track of coalescences */
+    unsigned int *coalescence_map;
+    unsigned int *coalesced_loci;
+} sim_t;
+
+
