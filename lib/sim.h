@@ -58,18 +58,17 @@ typedef struct {
     unsigned int sample_size;
     unsigned int num_loci;
     unsigned int num_parents;
+    unsigned int max_population_size;
+    unsigned int max_occupancy;
+    unsigned long random_seed;
     double torus_diameter;
     double pixel_size;
     double recombination_probability;
-    unsigned long random_seed;
-    unsigned int max_population_size;
-    unsigned int max_occupancy;
-    double max_time;
-    double beta_threshold;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;
     /* algorithm state */
+    double beta_threshold;
     unsigned int max_disc_pixels;
     unsigned int N;
     gsl_rng *rng;
