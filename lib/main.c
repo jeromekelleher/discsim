@@ -1,24 +1,24 @@
 /*
 ** Copyright (C) 2013 Jerome Kelleher <jerome.kelleher@ed.ac.uk>
 **  
-** This file is part of sim.
+** This file is part of discsim.
 ** 
-** sim is free software: you can redistribute it and/or modify
+** discsim is free software: you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License as published by
 ** the Free Software Foundation, either version 3 of the License, or
 ** (at your option) any later version.
 ** 
-** sim is distributed in the hope that it will be useful,
+** discsim is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
 ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ** GNU General Public License for more details.
 ** 
 ** You should have received a copy of the GNU General Public License
-** along with sim.  If not, see <http://www.gnu.org/licenses/>.
+** along with discsim.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 /* 
- * Simple command line front end for the sim code. This is intended 
+ * Simple command line front end for the discsim code. This is intended 
  * for development purposes only!
  */
 
@@ -53,42 +53,11 @@ fatal_error(const char *msg, ...)
     fprintf(stderr, "\n");
     exit(EXIT_FAILURE);
 }
-/*
-static void
-read_recombination_probabilities(sim_t *self, config_t *config)
-{
-    int j;
-    int m;
-    const char *key = "recombination_probabilities";
-    config_setting_t *s;
-    config_setting_t *setting = config_lookup(config, key); 
-    
-    if (setting == NULL) {
-        fatal_error(key, " is a required parameter");
-    }
-    if (config_setting_is_array(setting) == CONFIG_FALSE) {
-        fatal_error(key, "must be an array");
-    }
-    m = config_setting_length(setting) + 1;
-    self->num_loci = m;
-    self->recombination_probabilities = xmalloc(m * sizeof(double));
-    for (j = 0; j < m - 1; j++) {
-        s = config_setting_get_elem(setting, j);
-        if (s == NULL) {
-            fatal_error("error reading %s[%d]", key, j);
-        }
-        self->recombination_probabilities[j] = config_setting_get_float(s);
-    }
-    self->recombination_probabilities[m - 1] = 0.0;
-}
-*/
 
-
-/*
 static void
 read_sample(sim_t *self, config_t *config)
 {
-    int j;
+    unsigned int j;
     config_setting_t *s;
     config_setting_t *setting = config_lookup(config, "sample"); 
     if (setting == NULL) {
@@ -117,15 +86,14 @@ read_sample(sim_t *self, config_t *config)
         self->sample[2 * j + 1] = config_setting_get_float_elem(s, 1);
     }
 }
-*/
-/*
+
 static void
 read_events(sim_t *self, config_t *config)
 {
-    double u, r, rate, theta, alpha; 
+    const char *type;
+    double u, r, rate;
     int j;
     int e;
-    const char *type;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "events"); 
     if (setting == NULL) {
@@ -172,25 +140,10 @@ read_events(sim_t *self, config_t *config)
                 fatal_error("r not specified");
             }
             r = config_setting_get_float(t);
-            alloc_disc_event_class(&self->event_classes[j], rate, r, u);
-        } else if (strcmp(type, "gauss") == 0) {
-            t = config_setting_get_member(s, "u0"); 
-            if (t == NULL) {
-                fatal_error("u0 not specified");
-            }
-            u = config_setting_get_float(t);
-            t = config_setting_get_member(s, "theta"); 
-            if (t == NULL) {
-                fatal_error("theta not specified");
-            }
-            theta = config_setting_get_float(t);
-            t = config_setting_get_member(s, "alpha"); 
-            if (t == NULL) {
-                fatal_error("alpha not specified");
-            }
-            alpha = config_setting_get_float(t);
-            alloc_gaussian_event_class(&self->event_classes[j], rate, theta,
-                    alpha, u);
+            //alloc_disc_event_class(&self->event_classes[j], rate, r, u);
+            self->event_classes[j].r = r;
+            self->event_classes[j].u = u;
+            self->event_classes[j].rate = rate;
 
         } else {
             fatal_error("unknown event type '%s'", type);
@@ -217,59 +170,76 @@ read_config(sim_t *self, const char *filename)
         fatal_error("num_parents is a required parameter");
     }
     self->num_parents = tmp;
+    if (config_lookup_int(config, "num_loci", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("num_loci is a required parameter");
+    }
+    self->num_loci = tmp;
+    if (config_lookup_int(config, "max_occupancy", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("max_occupancy is a required parameter");
+    }
+    self->max_occupancy = tmp;
+    if (config_lookup_int(config, "max_population_size", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("max_population_size is a required parameter");
+    }
+    self->max_population_size = tmp;
     if (config_lookup_int(config, "random_seed", &tmp) 
             == CONFIG_FALSE) {
         fatal_error("random_seed is a required parameter");
     }
     self->random_seed = tmp;
-    if (config_lookup_int(config, "kdtree_bucket_size", &tmp) 
-            == CONFIG_FALSE) {
-        fatal_error("kdtree_bucket_size is a required parameter");
-    }
-    self->kdtree_bucket_size = tmp;
-    if (config_lookup_int(config, "max_kdtree_insertions", &tmp) 
-                == CONFIG_FALSE) {
-        fatal_error("max_kdtree_insertions is a required parameter");
-    }
-    self->max_kdtree_insertions = tmp; 
-    if (config_lookup_int(config, "max_lineages", &tmp) 
-                == CONFIG_FALSE) {
-        fatal_error("max_lineages is a required parameter");
-    }
-    self->max_lineages = tmp; 
     if (config_lookup_float(config, "torus_diameter", &self->torus_diameter) 
             == CONFIG_FALSE) {
         fatal_error("torus_diameter is a required parameter");
     }
-    if (config_lookup_float(config, "max_time", 
-                &self->max_time) == CONFIG_FALSE) {
-        fatal_error("max_time is a required parameter");
+    if (config_lookup_float(config, "pixel_size", 
+                &self->pixel_size) == CONFIG_FALSE) {
+        fatal_error("pixel_size is a required parameter");
     }
+    if (config_lookup_float(config, "recombination_probability", 
+                &self->recombination_probability) == CONFIG_FALSE) {
+        fatal_error("recombination_probability is a required parameter");
+    }
+
     read_events(self, config);    
-    //read_sample(self, config);
-    //read_recombination_probabilities(self, config); 
+    read_sample(self, config);
 
     config_destroy(config);
     free(config);
 }
 
-*/
 
 
 int
 main(int argc, char** argv)
 {
-    //int ret;
+    int ret;
     //int not_done = 1;
     sim_t *self = xcalloc(1, sizeof(sim_t));
-    printf("%s", argv[0]);  // REMOVE
     if (argc != 2) {
         fatal_error("usage: sim <configuration file>");
     }
-    //read_config(self, argv[1]); 
-    /*
+    read_config(self, argv[1]); 
+    sim_print_parameters(self);
+    ret = sim_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = sim_initialise(self);
-    ERCS_ERROR_CHECK(ret, out); 
+    if (ret != 0) {
+        goto out;
+    }
+    printf("running simulate\n");
+    ret = sim_simulate(self, 10, 1e300);
+    if (ret != 0) {
+        goto out;
+    }
+    sim_print_state(self, 1); 
+
+    //ERCS_ERROR_CHECK(ret, out); 
+    /*
     while (not_done) {
         ret = sim_simulate(self, UINT_MAX);
         ERCS_ERROR_CHECK(ret, out);
@@ -282,12 +252,13 @@ out:
         printf("Error occured: %d: %s\n", ret, sim_error_str(ret));
     }
     */
+out:
+    if (ret != 0) {
+        printf("error occured: %s\n", sim_error_message(ret));
+    }   
     sim_free(self);
-    /*
-    free(self->recombination_probabilities);
     free(self->event_classes);
     free(self->sample); 
-    */
     free(self);
 
     return EXIT_SUCCESS;
