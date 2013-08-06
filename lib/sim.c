@@ -394,6 +394,8 @@ sim_alloc(sim_t *self)
     double r = self->event_classes[0].r;
     double u = self->event_classes[0].u;
     self->N = self->torus_diameter / self->pixel_size;
+    /* we assume that uint64_t <= size of a pointer */
+    assert(sizeof(uint64_t) <= sizeof(uintptr_t));
     if (fmod(self->torus_diameter, self->pixel_size) != 0.0) {
         ret = ERR_BAD_PIXEL_SIZE;
         goto out;
@@ -752,7 +754,7 @@ sim_add_individual(sim_t *self, individual_t *ind)
             goto out;
         }
     }
-    self->sample_size++;
+    self->population_size++;
 out:
     return ret;
 }
@@ -785,7 +787,7 @@ sim_remove_individual(sim_t *self, individual_t *ind)
         sim_remove_individual_from_pixel(self, pixel, ind);
     }
     sim_free_individual(self, ind);
-    self->sample_size--;
+    self->population_size--;
 
 }
 /*
@@ -838,7 +840,7 @@ sim_initialise(sim_t *self)
             self->tau[l][j] = 0.0;
         }
     }
-    self->sample_size = self->sample_size;
+    self->population_size = self->sample_size;
     self->coalesced_loci[0] = 0;
     self->time = 0.0;
     self->successful_events = 0;
@@ -986,6 +988,7 @@ sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
     individual_t **C = self->child_buffer;
     unsigned int S_size, C_size;
     uint64_t set_item;
+    uintptr_t int_ptr;
     double Lambda, jump_proba, *x;
     avl_node_t *node;
     set_map_value_t *smv, smv_search;
@@ -1033,7 +1036,8 @@ sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
             S_size = 0;
             for (node = self->P[pixel].head; node != NULL; node = node->next) {
                 set_item =  *((uint64_t *) node->item);
-                ind = (individual_t *) set_item; 
+                int_ptr = (uintptr_t) set_item;
+                ind = (individual_t *) int_ptr; 
                 x = ind->location; 
                 if (torus_squared_distance(z, x, self->torus_diameter) < gsl_pow_2(r)) {
                     S[S_size] = ind;
@@ -1079,6 +1083,45 @@ out:
 }
 
 
+int
+sim_get_population(sim_t *self, avl_tree_t *pop)
+{
+    int ret = 0;
+    uint64_t id;
+    unsigned int pixel;
+    avl_node_t *node, *pop_node;
+    avl_init_tree(pop, avl_set_compare, NULL); 
+    node = NULL; 
+    for (pixel = 0; pixel < gsl_pow_2(self->N); pixel++) {
+        for (node = self->P[pixel].head; node != NULL; node = node->next) {
+            id = *((uint64_t *) node->item);
+            pop_node = sim_alloc_avl_set_node(self, id); 
+            if (pop_node == NULL) {
+                ret = ERR_OUT_OF_AVL_SET_NODES;
+                goto out;
+            }
+            if (avl_insert_node(pop, pop_node) == NULL) {
+                sim_free_avl_set_node(self, pop_node);
+            }
+        }
+    }
+    assert(avl_count(pop) == self->population_size);
+out: 
+    return ret;
+}
+
+/* 
+ * Frees the nodes in the specified set back to the simulation.
+ */
+void 
+sim_free_population(sim_t *self, avl_tree_t *pop)
+{
+    avl_node_t *node;
+    for (node = pop->head; node != NULL; node = node->next) {
+        sim_free_avl_set_node(self, node);
+    }
+}
+
 void
 sim_print_parameters(sim_t *self)
 {
@@ -1107,33 +1150,29 @@ sim_print_parameters(sim_t *self)
 
 }
 
-void
+int
 sim_print_state(sim_t *self, int detail)
 {
+    int ret = 0;
     unsigned int j, k, l, h, v[2];
     avl_tree_t chi;
     double *x;
     uint64_t id, pixel;
+    uintptr_t int_ptr;
     set_map_value_t *set_map_value, search;
     avl_node_t *node, *chi_node;
     avl_init_tree(&chi, avl_set_compare, NULL); 
     individual_t *ind;
     node = NULL; 
-    /* fill chi first */
-    for (pixel = 0; pixel < gsl_pow_2(self->N); pixel++) {
-        for (node = self->P[pixel].head; node != NULL; node = node->next) {
-            id = *((uint64_t *) node->item);
-            chi_node = sim_alloc_avl_set_node(self, id); 
-            if (avl_insert_node(&chi, chi_node) == NULL) {
-                sim_free_avl_set_node(self, chi_node);
-            }
-        }
+    ret = sim_get_population(self, &chi);
+    if (ret != 0) {
+        goto out;
     }
-    assert(avl_count(&chi) == self->sample_size);
     printf("chi = \n");
     for (chi_node = chi.head; chi_node != NULL; chi_node = chi_node->next) {
         id = *((uint64_t *) chi_node->item);
-        ind = (individual_t *) id;
+        int_ptr = (uintptr_t) id;
+        ind = (individual_t *) int_ptr;
         x = ind->location;
         printf("\t %p -> (%f, %f): %d\n", ind, x[0], x[1], 
                 avl_count(&ind->ancestry));                
@@ -1214,9 +1253,9 @@ sim_print_state(sim_t *self, int detail)
             printf("\n");
         }
     }
-    for (chi_node = chi.head; chi_node != NULL; chi_node = chi_node->next) {
-        sim_free_avl_set_node(self, chi_node);
-    }
+    sim_free_population(self, &chi);
+out:
+    return ret;
 }
 
 

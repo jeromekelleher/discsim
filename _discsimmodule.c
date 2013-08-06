@@ -346,8 +346,98 @@ out:
     return ret; 
 }
 
+static PyObject *
+Simulator_individual_to_python(Simulator *self, individual_t *ind)
+{
+    PyObject *ret = NULL; 
+    PyObject *key, *value;
+    double *x = ind->location;
+    avl_node_t *node;
+    int_map_value_t *imv;
+    PyObject *ancestry = NULL;
+    PyObject *loc = Py_BuildValue("(d,d)", x[0], x[1]);
+    if (loc == NULL) {
+        goto out;
+    }
+    ancestry = PyDict_New();
+    if (ancestry == NULL) {
+        goto out;
+    }
+    for (node = ind->ancestry.head; node != NULL; node = node->next) {
+        imv = (int_map_value_t *) node->item;
+        key = Py_BuildValue("I", imv->key);
+        if (key == NULL) {
+            goto out; 
+        }
+        value = Py_BuildValue("I", imv->value);
+        if (value == NULL) {
+            Py_DECREF(key);
+            goto out;
+        }
+        PyDict_SetItem(ancestry, key, value); 
+    }
+    ret = PyTuple_Pack(2, loc, ancestry);
+    if (ret == NULL) {
+        goto out;
+    }
+out:
+    Py_XDECREF(loc);
+    Py_XDECREF(ancestry);
+    return ret; 
+}
+        
+static PyObject *
+Simulator_get_population(Simulator  *self)
+{
+    int err;
+    unsigned int j;
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_ind = NULL;
+    avl_tree_t *pop = NULL;
+    avl_node_t *node;
+    uint64_t id;
+    uintptr_t int_ptr;
+    individual_t *ind;
 
-
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    pop = PyMem_Malloc(sizeof(avl_tree_t));
+    if (pop == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = sim_get_population(self->sim, pop);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(avl_count(pop));
+    if (l == NULL) {
+        goto out;
+    }
+    j = 0;
+    for (node = pop->head; node != NULL; node = node->next) {
+        id = *((uint64_t *) node->item);
+        int_ptr = (uintptr_t) id;
+        ind = (individual_t *) int_ptr;
+        py_ind = Simulator_individual_to_python(self, ind);
+        if (PyList_SetItem(l, j, py_ind) != 0) {
+            goto out;
+        }
+        j++;
+    }
+    ret = l;
+    l = NULL;
+out:
+    if (pop != NULL) {
+        sim_free_population(self->sim, pop);
+        PyMem_Free(pop);
+    }
+    Py_XDECREF(l);
+    return ret; 
+}
 
 
 
@@ -372,6 +462,8 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_probability", 
             (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS, 
             "Returns the probability of recombination between adjacent loci" },
+    {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS, 
+            "Returns the state of the ancestral population" },
     {NULL}  /* Sentinel */
 };
 

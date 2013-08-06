@@ -123,6 +123,9 @@ int sim_alloc(sim_t *self);
 int sim_initialise(sim_t *self);
 int sim_simulate(sim_t *self, unsigned int max_jumps, double max_time);
 void sim_print_parameters(sim_t *self);
-void sim_print_state(sim_t *self, int detail);
+int sim_print_state(sim_t *self, int detail);
+int sim_get_population(sim_t *self, avl_tree_t *pop);
+void sim_free_population(sim_t *self, avl_tree_t *pop);
+
 const char * sim_error_message(int err);
 

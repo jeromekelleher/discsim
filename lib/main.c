@@ -236,7 +236,11 @@ main(int argc, char** argv)
     if (ret != 0) {
         goto out;
     }
-    sim_print_state(self, 1); 
+    ret = sim_print_state(self, 1); 
+    if (ret != 0) {
+        goto out;
+    }
+
 
     //ERCS_ERROR_CHECK(ret, out); 
     /*

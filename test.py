@@ -38,14 +38,14 @@ class TestInitialiser(unittest.TestCase):
         num_tests = 1000
         for j in range(num_tests):
             pixel_size = random.uniform(1, 3)
-            torus_diameter = 1024 * pixel_size
+            torus_diameter = 64 * pixel_size
             rho = random.uniform(0, 1)
             random_seed = random.randint(0, 2**32)
             num_parents = random.randint(1, 5)
-            num_loci = random.randint(0, 100)
+            num_loci = random.randint(1, 100)
             sample_size = random.randint(2, 50)
             max_occupancy = random.randint(sample_size, 100)
-            max_population_size = random.randint(sample_size, 100)
+            max_population_size = random.randint(2 * sample_size, 100)
             sample = []
             for k in range(sample_size):
                 x = random.uniform(0, torus_diameter)
@@ -67,10 +67,21 @@ class TestInitialiser(unittest.TestCase):
             self.assertEqual(s.get_torus_diameter(), torus_diameter)
             self.assertEqual(s.get_pixel_size(), pixel_size)
             self.assertEqual(s.get_recombination_probability(), rho)
-
-
+            pop = s.get_population()
+            locations = [x for x, a in pop]
+            ancestry = [a for x, a in pop]
+            self.assertEqual(len(pop), sample_size)
+            for x in sample:
+                self.assertTrue(x in locations)
             
-
+            for a in ancestry:
+                self.assertEqual(len(a), num_loci)
+                d = {}
+                for v in a.values():
+                    if v not in d:
+                        d[v] = 0
+                    d[v] += 1
+                self.assertEqual(len(d), 1)
             
 
 if __name__ == "__main__":
