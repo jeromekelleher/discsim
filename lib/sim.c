@@ -843,7 +843,7 @@ sim_initialise(sim_t *self)
     self->population_size = self->sample_size;
     self->coalesced_loci[0] = 0;
     self->time = 0.0;
-    self->successful_events = 0;
+    self->num_reproduction_events = 0;
     self->ancestral_material = self->sample_size * self->num_loci;
 out:
     return ret;
@@ -974,8 +974,17 @@ out:
     return ret;
 }
 
+/*
+ * Simulate the coalescent proces for at most the specified number 
+ * of events. The simulation may terminate before this 
+ * number of events occurs because the global time exceeds sim->max_time
+ * or complete coalescence occurs. If the simulation finishes because 
+ * of coalescence of time exceeded the stated maximum, 0 is returned.
+ * Otherwise 1 is returned, indictating that more simulation is 
+ * required. A negative return value indicates an error condition.
+ */
 int 
-sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
+sim_simulate(sim_t *self, uint64_t max_events)
 {
     int ret = 0;
     unsigned int j, k, pixel, max_occupancy, occupancy, pixel_count, v[2];
@@ -990,11 +999,13 @@ sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
     uint64_t set_item;
     uintptr_t int_ptr;
     double Lambda, jump_proba, *x;
+    uint64_t events = 0;
     avl_node_t *node;
     set_map_value_t *smv, smv_search;
     individual_t *ind;
-    while (self->ancestral_material > self->num_loci && self->time < max_time
-            && self->successful_events < max_jumps) {
+    while (self->ancestral_material > self->num_loci && self->time < self->max_time
+            && events < max_events) {
+        events++;
         //sim_print_state(self, 0);
         Lambda = 0.0;
         max_occupancy = 0;
@@ -1047,7 +1058,7 @@ sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
             jump_proba = sim_ubar(self, S_size) / sim_ubar(self, occupancy); 
             assert(jump_proba <= 1.0);
         } while (gsl_rng_uniform(self->rng) < 1.0 - jump_proba);
-        self->successful_events++;
+        self->num_reproduction_events++;
         C_size = gsl_ran_discrete(self->rng, self->beta_distributions[S_size]);
         gsl_ran_choose(self->rng, C, C_size, S, S_size, sizeof(individual_t *));
         ret = sim_generate_parents(self, C_size);
@@ -1077,6 +1088,11 @@ sim_simulate(sim_t *self, unsigned int max_jumps, double max_time)
             self->coalescence_map[k] = 0;
         }
         self->coalesced_loci[0] = 0;
+    }
+    ret = 1;
+    if (self->ancestral_material == self->num_loci 
+            || self->time >= self->max_time) {
+        ret = 0;
     }
 out:
     return ret;

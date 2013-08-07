@@ -19,6 +19,8 @@
 #include <Python.h>
 #include <structmember.h>
 
+#include <float.h>
+#include <gsl/gsl_math.h>
 #include "lib/sim.h"
 
 #if PY_MAJOR_VERSION >= 3
@@ -42,6 +44,14 @@ handle_library_error(int err)
 {
     PyErr_SetString(DiscsimLibraryError, sim_error_message(err));
 }
+
+static void 
+handle_input_error(const char *err)
+{
+    PyErr_SetString(DiscsimInputError, err);
+}
+
+
 
 static int 
 Simulator_check_sim(Simulator *self) 
@@ -191,6 +201,45 @@ Simulator_dealloc(Simulator* self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
+static int 
+Simulator_check_input(Simulator *self)
+{
+    int ret = -1;
+    unsigned int j;
+    sim_t *sim = self->sim;
+    event_class_t *e;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (sim->torus_diameter <= 0.0) {
+        handle_input_error("must have torus_edge > 0");
+        goto out;
+    }
+    
+    if (sim->num_event_classes == 0) {
+        handle_input_error("at least one event class required");
+        goto out;
+    }
+    for (j = 0; j < sim->num_event_classes; j++) {
+        e = &sim->event_classes[j];
+        if (e->r <= 0.0 || e->r > sim->torus_diameter / 2.0) {
+            handle_input_error("must have 0 < r < L / 2");
+            goto out;
+        }
+        if (e->u <= 0.0 || e->u >= 1.0) {
+            handle_input_error("must have 0 < u < 1");
+            goto out;
+        }
+        if (e->rate <= 0.0) {
+            handle_input_error("must have 0 < rate < 1");
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 static int
 Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
@@ -199,7 +248,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"sample", "event_classes", "num_loci", 
             "num_parents", "max_population_size", "max_occupancy", 
             "random_seed", "torus_diameter", "pixel_size",
-            "recombination_probability", NULL}; 
+            "recombination_probability", "max_time", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
     self->sim = sim; 
@@ -215,18 +264,23 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->random_seed = 1;
     sim->max_population_size = 1000;
     sim->max_occupancy = 10;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIkddd", kwlist, 
+    sim->max_time = DBL_MAX;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIkdddd", kwlist, 
             &PyList_Type, &sample, 
             &PyList_Type, &events, 
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
             &sim->max_occupancy, &sim->random_seed, &sim->torus_diameter,
-            &sim->pixel_size, &sim->recombination_probability)) {
+            &sim->pixel_size, &sim->recombination_probability, 
+            &sim->max_time)) {
         goto out;
     }
     if (Simulator_parse_sample(self, sample) != 0) {
         goto out;
     }
     if (Simulator_parse_events(self, events) != 0) {
+        goto out;
+    }
+    if (Simulator_check_input(self) != 0) {
         goto out;
     }
     sim_ret = sim_alloc(self->sim);
@@ -330,6 +384,44 @@ Simulator_get_pixel_size(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("d", self->sim->pixel_size);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_max_time(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->max_time);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_time(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->time);
+out:
+    return ret; 
+}
+
+
+static PyObject *
+Simulator_get_num_reproduction_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("K", 
+            (unsigned long long) self->sim->num_reproduction_events);
 out:
     return ret; 
 }
@@ -499,6 +591,41 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_run(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int status, not_done;
+    uint64_t simulated_events = 0;
+    uint64_t rem;
+    uint64_t chunk = 8192; 
+    unsigned long long num_events = ULLONG_MAX;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "|K", &num_events)) {
+        goto out;
+    }
+    not_done = 1; 
+    while (not_done) {
+        rem = num_events - simulated_events;
+        status = sim_simulate(self->sim, GSL_MIN(chunk, rem)); 
+        if (status < 0) {
+            handle_library_error(status);
+            goto out;
+        }
+        simulated_events += chunk;
+        not_done = status != 0 && simulated_events < num_events; 
+        if (PyErr_CheckSignals() < 0) {
+            goto out;
+        }
+    }
+    ret = status == 0 ? Py_True : Py_False;
+    Py_INCREF(ret);
+out:
+    return ret;
+}
+
 static PyMethodDef Simulator_methods[] = {
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS, 
             "Returns the number of loci" },
@@ -516,6 +643,13 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the torus diameter" },
     {"get_pixel_size", (PyCFunction) Simulator_get_pixel_size, METH_NOARGS, 
             "Returns the size of a pixel" },
+    {"get_max_time", (PyCFunction) Simulator_get_max_time, METH_NOARGS, 
+            "Returns the size of a pixel" },
+    {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS, 
+            "Returns the current simulation time" },
+    {"get_num_reproduction_events", 
+            (PyCFunction) Simulator_get_num_reproduction_events, METH_NOARGS, 
+            "Returns the number of reproduction events up to this point." },
     {"get_recombination_probability", 
             (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS, 
             "Returns the probability of recombination between adjacent loci" },
@@ -523,6 +657,10 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the state of the ancestral population" },
     {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS, 
             "Returns the history of the sample as a tuple (pi, tau)" },
+    {"run", (PyCFunction) Simulator_run, METH_VARARGS, 
+            "Simulates at most the specified number of events. Returns True\
+            if the required stopping conditions have been met and False \
+            otherwise." },
     {NULL}  /* Sentinel */
 };
 
@@ -611,14 +749,14 @@ init_discsim(void)
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
     
-    DiscsimInputError = PyErr_NewException("_discsim.DiscsimInputError", NULL,
+    DiscsimInputError = PyErr_NewException("_discsim.InputError", NULL,
             NULL);
     Py_INCREF(DiscsimInputError);
-    PyModule_AddObject(module, "DiscsimInputError", DiscsimInputError);
-    DiscsimLibraryError = PyErr_NewException("_discsim.DiscsimLibraryError", 
+    PyModule_AddObject(module, "InputError", DiscsimInputError);
+    DiscsimLibraryError = PyErr_NewException("_discsim.LibraryError", 
             NULL, NULL);
     Py_INCREF(DiscsimLibraryError);
-    PyModule_AddObject(module, "DiscsimLibraryError", DiscsimLibraryError);
+    PyModule_AddObject(module, "LibraryError", DiscsimLibraryError);
 
 #if PY_MAJOR_VERSION >= 3
     return module;

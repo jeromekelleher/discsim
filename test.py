@@ -34,8 +34,39 @@ class TestInitialiser(unittest.TestCase):
     Test the initialisation code for the low level interface
     """
     
+    def test_bad_events(self):
+        sample = [(0,0), (0,0)]
+        def f(x):
+            _discsim.Simulator(sample, x, torus_diameter=10)
+        self.assertRaises(_discsim.InputError, f, []) 
+        self.assertRaises(_discsim.InputError, f, [{}])
+        self.assertRaises(_discsim.InputError, f, [[]])
+        self.assertRaises(_discsim.InputError, f, [None])
+        e = {"r":None, "u":None, "rate":None}
+        self.assertRaises(_discsim.InputError, f, [e])
+        e = {"r":None, "u":0.5, "rate":1.0}
+        radii = ["12.2", 0, -1, 10]
+        for r in radii:
+            e["r"] = r 
+            self.assertRaises(_discsim.InputError, f, [e])
+        impacts = ["12", -1, 0, 1, 100]
+        e["r"] = 1
+        for u in impacts: 
+            e["u"] = u
+            self.assertRaises(_discsim.InputError, f, [e])
+        e["u"] = 0.5
+        for rate in ["a", None, -1000, 0]:
+            e["rate"] = rate
+            self.assertRaises(_discsim.InputError, f, [e])
+
+    def test_bad_parameters(self):
+        sample = [(0,0), (0,0)]
+        events = {"r":0.5, "u":0.5, "rate":0.5}
+        self.assertTrue(False, "Finish these tests") 
+    
+    
     def test_random_values(self):
-        num_tests = 1000
+        num_tests = 10
         for j in range(num_tests):
             pixel_size = random.uniform(1, 3)
             torus_diameter = 64 * pixel_size
@@ -46,6 +77,7 @@ class TestInitialiser(unittest.TestCase):
             sample_size = random.randint(2, 50)
             max_occupancy = random.randint(sample_size, 100)
             max_population_size = random.randint(2 * sample_size, 100)
+            max_time = random.uniform(1, 1e6)
             sample = []
             for k in range(sample_size):
                 x = random.uniform(0, torus_diameter)
@@ -58,7 +90,8 @@ class TestInitialiser(unittest.TestCase):
                     torus_diameter=torus_diameter, pixel_size=pixel_size,
                     recombination_probability=rho, num_parents=num_parents,
                     max_population_size=max_population_size, 
-                    max_occupancy=max_occupancy, random_seed=random_seed)
+                    max_occupancy=max_occupancy, random_seed=random_seed, 
+                    max_time=max_time)
             self.assertEqual(s.get_num_parents(), num_parents)
             self.assertEqual(s.get_num_loci(), num_loci)
             self.assertEqual(s.get_max_population_size(), max_population_size)
@@ -66,6 +99,7 @@ class TestInitialiser(unittest.TestCase):
             self.assertEqual(s.get_random_seed(), random_seed)
             self.assertEqual(s.get_torus_diameter(), torus_diameter)
             self.assertEqual(s.get_pixel_size(), pixel_size)
+            self.assertEqual(s.get_max_time(), max_time)
             self.assertEqual(s.get_recombination_probability(), rho)
             pop = s.get_population()
             locations = [x for x, a in pop]
@@ -91,7 +125,67 @@ class TestInitialiser(unittest.TestCase):
                     self.assertEqual(a, 0)
                     self.assertEqual(a, 0.0)
                 
+            self.assertEqual(s.get_time(), 0.0)
+            self.assertEqual(s.get_num_reproduction_events(), 0)
+
+class TestSimulation(unittest.TestCase):
+    """
+    Tests the simulation method to see if it works correctly.
+    """
+    
+    def setUp(self):
+        
+        events = [{"r":1, "u":0.99, "rate":1}]
+        L = 40
+        self._sample = [(0,0), (L/2, L/2)]
+        self._simulator = _discsim.Simulator(self._sample, events, 
+                torus_diameter=L, num_loci=1) 
+        
+    def test_one_event(self):
+        """
+        Test if the effect of one event is correct 
+        """
+        status = self._simulator.run(1)
+        self.assertFalse(status)
+        self.assertTrue(self._simulator.get_time() > 0.0)
+        self.assertEqual(self._simulator.get_num_reproduction_events(), 1)
+        pop = self._simulator.get_population()
+        locations = [x for x, a in pop]
+        # One of the sample locations must have stayed the same and 
+        # the other changed.
+        s = set(self._sample + locations)
+        self.assertEqual(len(s), 3)
+        ancestry = [a for x, a in pop]
+        self.assertEqual(len(pop), 2)
+        for a in ancestry:
+            self.assertEqual(len(a), 1)
+            d = {}
+            for v in a.values():
+                if v not in d:
+                    d[v] = 0
+                d[v] += 1
+            self.assertEqual(len(d), 1)
+   
+    def test_num_events(self):
+        """
+        Tests to ensure that the number of events run is exactly what 
+        is specified.
+        """
+        s = 0
+        for j in range(1, 6):
+            n = 10**j
+            status = self._simulator.run(n)
+            s += n
+            if not status:
+                self.assertEqual(self._simulator.get_num_reproduction_events(), s)
             
+
+    def test_coalescence(self):
+        """
+        Run's the simulation until coalescence.
+        """
+        status = self._simulator.run()
+        self.assertTrue(status)
 
 
 if __name__ == "__main__":

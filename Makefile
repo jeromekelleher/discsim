@@ -18,3 +18,5 @@ docs: ext2 figs
 	cd docs && make clean && make html
 
 	
+tags:
+	ctags -f TAGS *.c *.py lib/*.[c,h] 

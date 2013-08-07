@@ -26,6 +26,7 @@
 #include "util.h"
 
 #include <limits.h>
+#include <float.h>
 #include <string.h>
 #include <stdarg.h>
 #include <libconfig.h>
@@ -144,6 +145,12 @@ read_events(sim_t *self, config_t *config)
             self->event_classes[j].r = r;
             self->event_classes[j].u = u;
             self->event_classes[j].rate = rate;
+            if (r <= 0) {
+                fatal_error("r must be positive");
+            }
+            if (u <= 0 || u >= 1.0) {
+                fatal_error("u must be between 0 and 1.");
+            }
 
         } else {
             fatal_error("unknown event type '%s'", type);
@@ -198,6 +205,12 @@ read_config(sim_t *self, const char *filename)
                 &self->pixel_size) == CONFIG_FALSE) {
         fatal_error("pixel_size is a required parameter");
     }
+    if (config_lookup_float(config, "max_time", 
+                &self->max_time) == CONFIG_FALSE) {
+        fatal_error("max_time is a required parameter");
+    }
+
+
     if (config_lookup_float(config, "recombination_probability", 
                 &self->recombination_probability) == CONFIG_FALSE) {
         fatal_error("recombination_probability is a required parameter");
@@ -216,7 +229,7 @@ int
 main(int argc, char** argv)
 {
     int ret;
-    //int not_done = 1;
+    int not_done = 1;
     sim_t *self = xcalloc(1, sizeof(sim_t));
     if (argc != 2) {
         fatal_error("usage: sim <configuration file>");
@@ -231,31 +244,18 @@ main(int argc, char** argv)
     if (ret != 0) {
         goto out;
     }
-    printf("running simulate\n");
-    ret = sim_simulate(self, 10, 1e300);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sim_print_state(self, 1); 
-    if (ret != 0) {
-        goto out;
-    }
-
-
-    //ERCS_ERROR_CHECK(ret, out); 
-    /*
     while (not_done) {
         ret = sim_simulate(self, UINT_MAX);
-        ERCS_ERROR_CHECK(ret, out);
-        not_done = ret == ERCS_SIM_NOT_DONE;
+        if (ret < 0) {
+            goto out;
+        }
+        not_done = ret != 0; 
     }
-    sim_print_state(self);
-   
-out:
-    if (ret < 0) {
-        printf("Error occured: %d: %s\n", ret, sim_error_str(ret));
+    
+    ret = sim_print_state(self, 2); 
+    if (ret != 0) {
+        goto out;
     }
-    */
 out:
     if (ret != 0) {
         printf("error occured: %s\n", sim_error_message(ret));

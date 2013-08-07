@@ -22,13 +22,13 @@
 #include <gsl/gsl_randist.h>
 
 
-#define ERR_ALLOC_FAILED 1
-#define ERR_BAD_PIXEL_SIZE 2 
-#define ERR_OUT_OF_INT_MAP_NODES 3
-#define ERR_OUT_OF_SET_MAP_NODES 4 
-#define ERR_OUT_OF_AVL_SET_NODES 5 
-#define ERR_OUT_OF_INDIVIDUALS 6 
-#define ERR_AVL_OP_FAILED 7
+#define ERR_ALLOC_FAILED -1
+#define ERR_BAD_PIXEL_SIZE -2 
+#define ERR_OUT_OF_INT_MAP_NODES -3
+#define ERR_OUT_OF_SET_MAP_NODES -4 
+#define ERR_OUT_OF_AVL_SET_NODES -5 
+#define ERR_OUT_OF_INDIVIDUALS -6 
+#define ERR_AVL_OP_FAILED -7
 
 #include "avl.h"
 
@@ -64,6 +64,7 @@ typedef struct {
     double torus_diameter;
     double pixel_size;
     double recombination_probability;
+    double max_time;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;
@@ -75,7 +76,7 @@ typedef struct {
     avl_tree_t *P;
     avl_tree_t Q;
     double time;
-    uint64_t successful_events;
+    uint64_t num_reproduction_events;
     unsigned int population_size;
     unsigned int ancestral_material;
     double *ubar;
@@ -121,7 +122,7 @@ void sim_free(sim_t *self);
 void sim_set_max_occupancy(sim_t *self, double headroom);
 int sim_alloc(sim_t *self);
 int sim_initialise(sim_t *self);
-int sim_simulate(sim_t *self, unsigned int max_jumps, double max_time);
+int sim_simulate(sim_t *self, uint64_t max_events);
 void sim_print_parameters(sim_t *self);
 int sim_print_state(sim_t *self, int detail);
 int sim_get_population(sim_t *self, avl_tree_t *pop);
