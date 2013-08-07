@@ -440,7 +440,64 @@ out:
 }
 
 
+static PyObject *
+Simulator_get_history(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    PyObject *pi = NULL;
+    PyObject *tau = NULL;
+    PyObject *pi_locus, *tau_locus;
+    unsigned int j, l, n;
+    int err;
+    sim_t *sim = self->sim;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    pi = PyList_New(sim->num_loci);
+    if (pi == NULL) {
+        goto out;
+    }
+    tau = PyList_New(sim->num_loci);
+    if (tau == NULL) {
+        goto out;
+    }
+    n = 2 * sim->sample_size;
+    for (l = 0; l < sim->num_loci; l++) {
+        pi_locus = PyList_New(n);
+        if (pi_locus == NULL) {
+            goto out;
+        }
+        err = PyList_SetItem(pi, l, pi_locus);
+        if (err < 0) {
+            goto out;
+        }
+        tau_locus = PyList_New(n);
+        if (tau_locus == NULL) {
+            goto out;
+        }
+        err = PyList_SetItem(tau, l, tau_locus);
+        if (err < 0) {
+            goto out;
+        }
+        for (j = 0; j < n; j++) {
+            err = PyList_SetItem(pi_locus, j, PyLong_FromLong(sim->pi[l][j])); 
+            if (err < 0) {
+                goto out;
+            }
+            err = PyList_SetItem(tau_locus, j, 
+                    PyFloat_FromDouble(sim->tau[l][j])); 
+            if (err < 0) {
+                goto out;
+            }
+        }
+    }
+    ret = Py_BuildValue("(O, O)", pi, tau);
+out:
+    Py_XDECREF(pi);
+    Py_XDECREF(tau);
 
+    return ret;
+}
 
 static PyMethodDef Simulator_methods[] = {
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS, 
@@ -464,6 +521,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the probability of recombination between adjacent loci" },
     {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS, 
             "Returns the state of the ancestral population" },
+    {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS, 
+            "Returns the history of the sample as a tuple (pi, tau)" },
     {NULL}  /* Sentinel */
 };
 

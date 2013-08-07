@@ -73,7 +73,6 @@ class TestInitialiser(unittest.TestCase):
             self.assertEqual(len(pop), sample_size)
             for x in sample:
                 self.assertTrue(x in locations)
-            
             for a in ancestry:
                 self.assertEqual(len(a), num_loci)
                 d = {}
@@ -82,7 +81,18 @@ class TestInitialiser(unittest.TestCase):
                         d[v] = 0
                     d[v] += 1
                 self.assertEqual(len(d), 1)
+            pi, tau = s.get_history() 
+            self.assertEqual(num_loci, len(pi))
+            self.assertEqual(num_loci, len(tau))
+            for l in range(num_loci):
+                self.assertEqual(2 * sample_size, len(pi[l]))
+                self.assertEqual(2 * sample_size, len(tau[l]))
+                for a, t in zip(pi[l], tau[l]):
+                    self.assertEqual(a, 0)
+                    self.assertEqual(a, 0.0)
+                
             
+
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] "
