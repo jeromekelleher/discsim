@@ -215,15 +215,47 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have torus_edge > 0");
         goto out;
     }
-    
+    if (sim->num_loci == 0) {
+        handle_input_error("must have num_loci > 0");
+        goto out;
+    }
+    if (sim->num_parents == 0) {
+        handle_input_error("must have num_parents > 0");
+        goto out;
+    }
+    if (sim->max_population_size == 0) {
+        handle_input_error("must have max_population_size > 0");
+        goto out;
+    }
+    if (sim->max_occupancy == 0) {
+        handle_input_error("must have max_occupancy > 0");
+        goto out;
+    }
+    if (sim->recombination_probability < 0 || 
+            sim->recombination_probability > 1) {
+        handle_input_error("must have 0 <= recombination_probability <= 1");
+        goto out;
+    }
+    if (sim->max_time <= 0) {
+        handle_input_error("must have max_time > 0");
+        goto out;
+    }
+    if (sim->pixel_size <= 0 || sim->pixel_size > sim->torus_diameter / 4) {
+        handle_input_error("must have 0 < pixel_size <= L/4 ");
+        goto out;
+    }
+    if (fmod(sim->torus_diameter, sim->pixel_size) != 0.0) {
+        handle_input_error("L/s must be an integer");
+        goto out;
+    }
     if (sim->num_event_classes == 0) {
         handle_input_error("at least one event class required");
         goto out;
     }
     for (j = 0; j < sim->num_event_classes; j++) {
         e = &sim->event_classes[j];
-        if (e->r <= 0.0 || e->r > sim->torus_diameter / 2.0) {
-            handle_input_error("must have 0 < r < L / 2");
+        if (e->r <= 0.0 || e->r > sim->torus_diameter / 4.0) {
+            handle_input_error("must have 0 < r < L / 4");
             goto out;
         }
         if (e->u <= 0.0 || e->u >= 1.0) {

@@ -45,10 +45,11 @@ class TestInitialiser(unittest.TestCase):
         e = {"r":None, "u":None, "rate":None}
         self.assertRaises(_discsim.InputError, f, [e])
         e = {"r":None, "u":0.5, "rate":1.0}
-        radii = ["12.2", 0, -1, 10]
+        radii = ["12.2", 0, -1, 10, 2.6]
         for r in radii:
             e["r"] = r 
             self.assertRaises(_discsim.InputError, f, [e])
+        
         impacts = ["12", -1, 0, 1, 100]
         e["r"] = 1
         for u in impacts: 
@@ -61,12 +62,51 @@ class TestInitialiser(unittest.TestCase):
 
     def test_bad_parameters(self):
         sample = [(0,0), (0,0)]
-        events = {"r":0.5, "u":0.5, "rate":0.5}
-        self.assertTrue(False, "Finish these tests") 
+        events = [{"r":0.5, "u":0.5, "rate":0.5}]
+        def f(**kwargs):
+            _discsim.Simulator(sample, events, **kwargs)
+        self.assertRaises(_discsim.InputError, f, torus_diameter=-1)
+        self.assertRaises(_discsim.InputError, f, torus_diameter=0)
+        self.assertRaises(_discsim.InputError, f, num_loci=0)
+        self.assertRaises(_discsim.InputError, f, num_parents=0)
+        self.assertRaises(_discsim.InputError, f, max_population_size=0)
+        self.assertRaises(_discsim.InputError, f, max_occupancy=0)
+        self.assertRaises(_discsim.InputError, f, max_time=0)
+        self.assertRaises(_discsim.InputError, f, max_time=-1)
+        self.assertRaises(_discsim.InputError, f, 
+                recombination_probability=-1)
+        self.assertRaises(_discsim.InputError, f, 
+                recombination_probability=1.1)
+        self.assertRaises(_discsim.InputError, f, 
+                recombination_probability=10)
+        self.assertRaises(_discsim.InputError, f, pixel_size=-1)
+        self.assertRaises(_discsim.InputError, f, pixel_size=0)
+        self.assertRaises(_discsim.InputError, f, pixel_size=1.1, 
+                torus_diameter=10)
+        self.assertRaises(_discsim.InputError, f, pixel_size=0.33, 
+                torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, pixel_size=2, 
+                torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, pixel_size=0.5, 
+                torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, pixel_size=1, 
+                torus_diameter=3)
     
-    
+    def test_bad_sample(self):
+        events = [{"r":0.5, "u":0.5, "rate":0.5}]
+        def f(sample, **kwargs):
+            _discsim.Simulator(sample, events, **kwargs)
+        self.assertRaises(_discsim.InputError, f, [])
+        self.assertRaises(_discsim.InputError, f, [""])
+        self.assertRaises(_discsim.InputError, f, [()])
+        self.assertRaises(_discsim.InputError, f, [(1,)])
+        self.assertRaises(_discsim.InputError, f, [(10,10)], torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, [(-1,-1)], torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, [(-1,0)], torus_diameter=1)
+        self.assertRaises(_discsim.InputError, f, [(0,1)], torus_diameter=1)
+
     def test_random_values(self):
-        num_tests = 10
+        num_tests = 10 
         for j in range(num_tests):
             pixel_size = random.uniform(1, 3)
             torus_diameter = 64 * pixel_size
@@ -178,7 +218,20 @@ class TestSimulation(unittest.TestCase):
             s += n
             if not status:
                 self.assertEqual(self._simulator.get_num_reproduction_events(), s)
-            
+           
+
+    def check_single_locus_history(self, pi, tau):
+        self.assertEqual(len(pi), 1)
+        self.assertEqual(len(tau), 1)
+        self.assertEqual(len(pi[0]), 4)
+        self.assertEqual(len(tau[0]), 4)
+        self.assertTrue(tau[0][-1] > 0.0)
+        self.assertTrue(all(a == 0 for a in tau[0][:3]))
+        self.assertEqual(pi[0][-1], 0)
+        self.assertEqual(pi[0][0], 0)
+        self.assertEqual(pi[0][1], 3)
+        self.assertEqual(pi[0][2], 3)
+         
 
     def test_coalescence(self):
         """
@@ -186,6 +239,21 @@ class TestSimulation(unittest.TestCase):
         """
         status = self._simulator.run()
         self.assertTrue(status)
+        pi, tau = self._simulator.get_history()
+        self.check_single_locus_history(pi, tau) 
+
+    def test_pixel_size(self):
+        L = 10
+        sample = [(0,0), (L/2, L/2)]
+        for r in [0.5, 1, 2.33, 2.5]:
+            for s in [0.25, 0.5, 1, 2, 2.5]:
+                events = [{"r":r, "u":0.99, "rate":1}]
+                sim = _discsim.Simulator(sample, events, 
+                        torus_diameter=L, pixel_size=s) 
+                self.assertTrue(sim.run()) 
+                pi, tau = sim.get_history()
+                self.check_single_locus_history(pi, tau) 
+
 
 
 if __name__ == "__main__":
