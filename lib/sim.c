@@ -24,10 +24,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
-
 
 const char * 
 sim_error_message(int err)
@@ -82,7 +80,6 @@ avl_int_map_compare(const void *pa, const void *pb)
     return (a > b) - (a < b);
 }
 
-
 /* 
  * Returns the expected density of ancestors at equilibrium in a simulation 
  * with num_parents parents and impact u.
@@ -96,7 +93,6 @@ equilibrium_density(double num_parents, double u)
     double ret = (N  - numer / lu) / M_PI;
     return ret;
 }
-
 
 /*
  * Returns the square of the distance between the two specified points on a 
@@ -207,12 +203,9 @@ beta(int n, int k, double u)
     double ret = gsl_sf_choose(n, k);
     ret *= gsl_pow_int(u, k) * gsl_pow_int(1.0 - u, n - k);
     ret /= 1.0 - gsl_pow_int(1.0 - u, n);
-    //printf("beta %d %d %f = %.14f\n", n, k, u, ret);
     return ret;
 
 }
-
-
 
 static inline double 
 clamp(double x, double min, double max)
@@ -225,7 +218,6 @@ clamp(double x, double min, double max)
     }
     return ret;
 }
-
 
 /* Returns 1 if a disc of radius r intersects with a pixel of side pixel_size
  * with bottom-left corner x*pixel_size, y*pixel_size.
@@ -367,7 +359,6 @@ sim_get_disc_pixels(sim_t *self, double *z)
     }
 
 }
-
 
 /*
  * Sets the max occupancy to reflect the parameters of the simulation 
@@ -639,8 +630,6 @@ sim_free_avl_int_map_node(sim_t *self, avl_node_t *node)
     self->avl_int_map_node_heap_top++;
     self->avl_int_map_node_heap[self->avl_int_map_node_heap_top] = node;
 }
-
-
 
 static int 
 sim_add_pixel_to_occupancy(sim_t *self, unsigned int h, unsigned int pixel)
@@ -979,7 +968,7 @@ out:
  * of events. The simulation may terminate before this 
  * number of events occurs because the global time exceeds sim->max_time
  * or complete coalescence occurs. If the simulation finishes because 
- * of coalescence of time exceeded the stated maximum, 0 is returned.
+ * of coalescence or time exceeded the stated maximum, 0 is returned.
  * Otherwise 1 is returned, indictating that more simulation is 
  * required. A negative return value indicates an error condition.
  */
@@ -990,6 +979,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
     unsigned int j, k, pixel, max_occupancy, occupancy, pixel_count, v[2];
     double r = self->event_classes[0].rate;
     double lambda = self->event_classes[0].rate;
+    double non_repr_rate, total_rate;
     double Lambda_const = lambda * gsl_pow_2(self->pixel_size / self->torus_diameter);
     double z[] = {0.0, 0.0};
     double *p = self->probability_buffer;
@@ -1003,10 +993,14 @@ sim_simulate(sim_t *self, uint64_t max_events)
     avl_node_t *node;
     set_map_value_t *smv, smv_search;
     individual_t *ind;
+    non_repr_rate = 0.0;
+    for (j = 1; j < self->num_event_classes; j++) {
+        non_repr_rate += self->event_classes[j].rate;
+    }
     while (self->ancestral_material > self->num_loci && self->time < self->max_time
             && events < max_events) {
         events++;
-        //sim_print_state(self, 0);
+        /* first calculate the rate of (potential) reproduction events */
         Lambda = 0.0;
         max_occupancy = 0;
         memset(p, 0, self->max_occupancy * sizeof(double)); 
@@ -1023,6 +1017,11 @@ sim_simulate(sim_t *self, uint64_t max_events)
         }
         for (j = 1; j <= max_occupancy; j++) {
             p[j - 1] /= Lambda;
+        }
+        /* Now determine the type of event this is */ 
+        total_rate = Lambda * Lambda_const + non_repr_rate; 
+        if (gsl_rng_uniform(self->rng) < non_repr_rate / total_rate) {
+            sim_non_reproduction_event(self); 
         }
         do {
             self->time += gsl_ran_exponential(self->rng, 

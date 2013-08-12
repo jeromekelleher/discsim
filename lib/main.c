@@ -141,7 +141,6 @@ read_events(sim_t *self, config_t *config)
                 fatal_error("r not specified");
             }
             r = config_setting_get_float(t);
-            //alloc_disc_event_class(&self->event_classes[j], rate, r, u);
             self->event_classes[j].r = r;
             self->event_classes[j].u = u;
             self->event_classes[j].rate = rate;
