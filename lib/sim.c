@@ -400,13 +400,13 @@ sim_alloc(sim_t *self)
     self->P = xmalloc(gsl_pow_2(self->N) * sizeof(avl_tree_t));
     /* set up buffers */
     self->max_disc_pixels = gsl_pow_2(4 * ((int)(r / self->pixel_size) + 1));
+    self->max_num_children = self->max_population_size;
     self->pixel_buffer = xmalloc(self->max_disc_pixels * sizeof(unsigned int));
     self->probability_buffer = xmalloc(self->max_occupancy * sizeof(double));
-    self->intersected_buffer = xmalloc(
-            (self->max_occupancy + 1) * sizeof(unsigned int));
-    self->child_buffer = xmalloc(
-            (self->max_occupancy + 1) * sizeof(unsigned int));
-    self->parent_buffer = xmalloc((self->num_parents + 1) * sizeof(avl_node_t *));
+    self->intersected_buffer = xmalloc((self->max_occupancy + 1) 
+            * sizeof(void *));
+    self->child_buffer = xmalloc(self->max_num_children * sizeof(void *));
+    self->parent_buffer = xmalloc((self->num_parents + 1) * sizeof(void *));
     /* Set up the AVL trees */
     avl_init_tree(&self->Q, avl_set_map_compare, NULL);
     for (j = 0; j < gsl_pow_2(self->N); j++) {
@@ -833,10 +833,69 @@ sim_initialise(sim_t *self)
     self->coalesced_loci[0] = 0;
     self->time = 0.0;
     self->num_reproduction_events = 0;
+    self->num_non_reproduction_events = 0;
     self->ancestral_material = self->sample_size * self->num_loci;
 out:
     return ret;
 }
+
+static int
+sim_get_large_event_children(sim_t *self, double *z, double r, double u)
+{
+    int ret = 0;
+    uint64_t id;
+    uintptr_t int_ptr;
+    unsigned int pixel;
+    individual_t *ind;
+    avl_tree_t pop;
+    avl_node_t *node, *pop_node;
+    avl_init_tree(&pop, avl_set_compare, NULL); 
+    
+    /* This implementation is inefficient, and is only appropriate if this is 
+     * called very rarely.
+     */
+    self->num_children = 0;
+    for (pixel = 0; pixel < gsl_pow_2(self->N); pixel++) {
+        for (node = self->P[pixel].head; node != NULL; node = node->next) {
+            id = *((uint64_t *) node->item);
+            int_ptr = (uintptr_t) id;
+            ind = (individual_t *) int_ptr;
+            if (torus_squared_distance(z, ind->location, self->torus_diameter) 
+                    < gsl_pow_2(r)) {
+                pop_node = sim_alloc_avl_set_node(self, id); 
+                if (pop_node == NULL) {
+                    ret = ERR_OUT_OF_AVL_SET_NODES;
+                    goto out;
+                }
+                if (avl_insert_node(&pop, pop_node) == NULL) {
+                    sim_free_avl_set_node(self, pop_node);
+                }
+            }
+        }
+    }
+    /* Now go through the set of potential children and pick out those who 
+     * were born.
+     */
+    for (pop_node = pop.head; pop_node != NULL; pop_node = pop_node->next) {
+        id = *((uint64_t *) pop_node->item);
+        int_ptr = (uintptr_t) id;
+        ind = (individual_t *) int_ptr;
+        if (gsl_rng_uniform(self->rng) < u) {
+            self->child_buffer[self->num_children] = ind;
+            self->num_children++;
+            if (self->num_children >= self->max_num_children) {
+                ret = ERR_OUT_OF_INDIVIDUALS;
+                goto out;
+            }
+        }
+        sim_free_avl_set_node(self, pop_node);
+    }
+
+out: 
+    return ret;
+}
+
+
 
 
 static double 
@@ -867,7 +926,6 @@ sim_select_parent(sim_t *self, unsigned int current_parent, unsigned int gap)
                 ret = gsl_rng_uniform_int(self->rng, num_parents);
             }
         }
-
     }
     return ret;
 }
@@ -916,7 +974,7 @@ out:
  * buffer based on the individuals in the child_buffer. 
  */
 static int 
-sim_generate_parents(sim_t *self, unsigned int C_size)
+sim_generate_parents(sim_t *self)
 {
     int ret = 0;
     unsigned int j, parent, previous_locus;
@@ -930,7 +988,7 @@ sim_generate_parents(sim_t *self, unsigned int C_size)
             goto out;
         }
     }
-    for (j = 0; j < C_size; j++) {
+    for (j = 0; j < self->num_children; j++) {
         /* Assign the parent for the first locus */
         parent = gsl_rng_uniform_int(self->rng, self->num_parents);
         node = C[j]->ancestry.head;
@@ -963,6 +1021,97 @@ out:
     return ret;
 }
 
+
+/* 
+ * Completes an event centred on z with radius r, assuming that the 
+ * set of children has been collected into the child_buffer.
+ */
+static int
+sim_complete_event(sim_t *self, double *z, double r)
+{
+    int ret = 0;
+    unsigned int j, k;
+    individual_t *ind;
+    ret = sim_generate_parents(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_children; j++) {
+        sim_remove_individual(self, self->child_buffer[j]);
+    }
+    /* add in the parents, if they have any ancestral material */
+    for (j = 0; j < self->num_parents; j++) {
+        ind = self->parent_buffer[j];
+        if (avl_count(&ind->ancestry) == 0) {
+            sim_free_individual(self, ind);
+        } else {
+            random_point_torus_disc(ind->location, z, r, 
+                    self->torus_diameter, self->rng);
+            ret = sim_add_individual(self, ind);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    /* Clear the coalescence markers */
+    for (j = 1; j <= self->coalesced_loci[0]; j++) {
+        k = self->coalesced_loci[j];
+        self->coalescence_map[k] = 0;
+    }
+    self->coalesced_loci[0] = 0;
+out:
+    return ret;
+}
+
+
+
+
+/* 
+ * Simulates a non-reproduction event.
+ */
+static int 
+sim_non_reproduction_event(sim_t *self)
+{
+    int ret = 0;
+    unsigned int j;
+    double r, u;
+    double z[] = {0.0, 0.0};
+    double L = self->torus_diameter;
+    double non_repr_rate = 0.0;
+    double *p = xmalloc(self->num_event_classes * sizeof(double));
+    
+    for (j = 1; j < self->num_event_classes; j++) {
+        non_repr_rate += self->event_classes[j].rate;
+        p[j - 1] = self->event_classes[j].rate;
+    }
+    for (j = 0; j < self->num_event_classes - 1; j++) {
+        p[j] /= non_repr_rate;
+    }
+    j = 1 + probability_list_select(p, self->num_event_classes - 1, 
+            gsl_rng_uniform(self->rng));
+    r = self->event_classes[j].r;
+    u = self->event_classes[j].u;
+    z[0] = L * gsl_rng_uniform(self->rng);
+    z[1] = L * gsl_rng_uniform(self->rng);
+    //printf("non reproduction\n");
+    //printf("Event class %d: r=%f u=%f\n", j, r, u);
+    ret = sim_get_large_event_children(self, z, r, u);
+    if (ret != 0) {
+        goto out;
+    }
+    //printf("at (%f,%f): %d\n", z[0], z[1], self->num_children); 
+    ret = sim_complete_event(self, z, r);
+    self->num_non_reproduction_events++;
+    if (ret != 0) {
+        goto out;
+    }
+
+out:
+    free(p);
+    return ret;
+}
+
+
 /*
  * Simulate the coalescent proces for at most the specified number 
  * of events. The simulation may terminate before this 
@@ -984,8 +1133,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
     double z[] = {0.0, 0.0};
     double *p = self->probability_buffer;
     individual_t **S = self->intersected_buffer;
-    individual_t **C = self->child_buffer;
-    unsigned int S_size, C_size;
+    unsigned int S_size;
     uint64_t set_item;
     uintptr_t int_ptr;
     double Lambda, jump_proba, *x;
@@ -993,6 +1141,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
     avl_node_t *node;
     set_map_value_t *smv, smv_search;
     individual_t *ind;
+
     non_repr_rate = 0.0;
     for (j = 1; j < self->num_event_classes; j++) {
         non_repr_rate += self->event_classes[j].rate;
@@ -1020,12 +1169,14 @@ sim_simulate(sim_t *self, uint64_t max_events)
         }
         /* Now determine the type of event this is */ 
         total_rate = Lambda * Lambda_const + non_repr_rate; 
+        self->time += gsl_ran_exponential(self->rng, 1.0 / total_rate); 
         if (gsl_rng_uniform(self->rng) < non_repr_rate / total_rate) {
-            sim_non_reproduction_event(self); 
-        }
-        do {
-            self->time += gsl_ran_exponential(self->rng, 
-                    1.0 / (Lambda * Lambda_const));
+            ret = sim_non_reproduction_event(self); 
+            if (ret != 0) {
+                goto out;
+            }
+        } else {
+            /* this is a reproduction event */
             occupancy = 1 + probability_list_select(p, max_occupancy, 
                     gsl_rng_uniform(self->rng));
             /* choose a pixel with this occupancy uniformly */
@@ -1056,37 +1207,18 @@ sim_simulate(sim_t *self, uint64_t max_events)
             }
             jump_proba = sim_ubar(self, S_size) / sim_ubar(self, occupancy); 
             assert(jump_proba <= 1.0);
-        } while (gsl_rng_uniform(self->rng) < 1.0 - jump_proba);
-        self->num_reproduction_events++;
-        C_size = gsl_ran_discrete(self->rng, self->beta_distributions[S_size]);
-        gsl_ran_choose(self->rng, C, C_size, S, S_size, sizeof(individual_t *));
-        ret = sim_generate_parents(self, C_size);
-        if (ret != 0) {
-            goto out;
-        }
-        for (j = 0; j < C_size; j++) {
-            sim_remove_individual(self, C[j]);
-        }
-        /* add in the parents, if they have any ancestral material */
-        for (j = 0; j < self->num_parents; j++) {
-            ind = self->parent_buffer[j];
-            if (avl_count(&ind->ancestry) == 0) {
-                sim_free_individual(self, ind);
-            } else {
-                random_point_torus_disc(ind->location, z, r, self->torus_diameter, 
-                        self->rng);
-                ret = sim_add_individual(self, ind);
+            if (gsl_rng_uniform(self->rng) < jump_proba) {
+                self->num_reproduction_events++;
+                self->num_children = gsl_ran_discrete(self->rng, 
+                        self->beta_distributions[S_size]);
+                gsl_ran_choose(self->rng, self->child_buffer, self->num_children, 
+                        S, S_size, sizeof(individual_t *));
+                ret = sim_complete_event(self, z, r);
                 if (ret != 0) {
                     goto out;
                 }
-            }
-        }
-        /* Clear the coalescence markers */
-        for (j = 1; j <= self->coalesced_loci[0]; j++) {
-            k = self->coalesced_loci[j];
-            self->coalescence_map[k] = 0;
-        }
-        self->coalesced_loci[0] = 0;
+            } 
+        } 
     }
     ret = 1;
     if (self->ancestral_material == self->num_loci 
@@ -1096,6 +1228,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
 out:
     return ret;
 }
+
 
 
 int
@@ -1183,6 +1316,9 @@ sim_print_state(sim_t *self, int detail)
     if (ret != 0) {
         goto out;
     }
+    printf("reproduction events:    \t%lu\n", self->num_reproduction_events);
+    printf("non reproduction events:\t%lu\n", 
+            self->num_non_reproduction_events);
     printf("chi = \n");
     for (chi_node = chi.head; chi_node != NULL; chi_node = chi_node->next) {
         id = *((uint64_t *) chi_node->item);

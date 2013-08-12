@@ -77,6 +77,7 @@ typedef struct {
     avl_tree_t Q;
     double time;
     uint64_t num_reproduction_events;
+    uint64_t num_non_reproduction_events;
     unsigned int population_size;
     unsigned int ancestral_material;
     double *ubar;
@@ -104,6 +105,8 @@ typedef struct {
     unsigned int *pixel_buffer;
     double *probability_buffer;
     individual_t **intersected_buffer;
+    unsigned int max_num_children;
+    unsigned int num_children;
     individual_t **child_buffer;
     individual_t **parent_buffer;
     /* ancestry */
