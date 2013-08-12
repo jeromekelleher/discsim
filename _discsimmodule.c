@@ -21,7 +21,9 @@
 
 #include <float.h>
 #include <gsl/gsl_math.h>
+#include "lib/util.h"
 #include "lib/sim.h"
+#include "lib/nystrom.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -38,11 +40,15 @@ typedef struct {
     sim_t *sim;
 } Simulator;
 
+typedef struct {
+    PyObject_HEAD
+    nystrom_t *nystrom;
+} IdentitySolver;
 
 static void 
 handle_library_error(int err)
 {
-    PyErr_SetString(DiscsimLibraryError, sim_error_message(err));
+    PyErr_SetString(DiscsimLibraryError, discsim_error_message(err));
 }
 
 static void 
@@ -51,8 +57,79 @@ handle_input_error(const char *err)
     PyErr_SetString(DiscsimInputError, err);
 }
 
+/*
+ * Retrieves a number value with the specified key from the specified 
+ * dictionary.
+ */
+static PyObject *
+get_dict_number(PyObject *dict, const char *key_str)
+{
+    PyObject *ret = NULL;
+    PyObject *value;
+    PyObject *key = Py_BuildValue("s", key_str);
+    if (!PyDict_Contains(dict, key)) {
+        PyErr_Format(DiscsimInputError, "'%s' not specified", key_str); 
+        goto out;
+    }
+    value = PyDict_GetItem(dict, key);
+    if (!PyNumber_Check(value)) {
+        PyErr_Format(DiscsimInputError, "'%s' is not number", key_str); 
+        goto out;
+    }
+    ret = value;
+out:
+    Py_DECREF(key);
+    return ret;
+}
 
 
+
+static int 
+discsim_parse_event_classes(PyObject *py_events, event_class_t *events) 
+{
+    int ret = -1;
+    int j, size;
+    double rate, u, r;
+    PyObject *item, *value;
+    size = PyList_Size(py_events);
+    if (size == 0) {
+        PyErr_SetString(DiscsimInputError, "must have > 0 events"); 
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        item = PyList_GetItem(py_events, j);
+        if (!PyDict_Check(item)) {
+            PyErr_SetString(DiscsimInputError, "not a dictionary"); 
+            goto out;
+        }
+        value = get_dict_number(item, "rate");
+        if (value == NULL) {
+            goto out;
+        }
+        rate = PyFloat_AsDouble(value);
+        value = get_dict_number(item, "r");
+        if (value == NULL) {
+            goto out;
+        }
+        r = PyFloat_AsDouble(value);
+        value = get_dict_number(item, "u");
+        if (value == NULL) {
+            goto out;
+        }
+        u = PyFloat_AsDouble(value);
+        events[j].rate = rate;
+        events[j].r = r;
+        events[j].u = u;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+/*===================================================================
+ * Simulator
+ *===================================================================
+ */
 static int 
 Simulator_check_sim(Simulator *self) 
 {
@@ -115,38 +192,11 @@ out:
     return ret; 
 }
 
-/*
- * Retrieves a number value with the specified key from the specified 
- * dictionary.
- */
-static PyObject *
-get_dict_number(PyObject *dict, const char *key_str)
-{
-    PyObject *ret = NULL;
-    PyObject *value;
-    PyObject *key = Py_BuildValue("s", key_str);
-    if (!PyDict_Contains(dict, key)) {
-        PyErr_Format(DiscsimInputError, "'%s' not specified", key_str); 
-        goto out;
-    }
-    value = PyDict_GetItem(dict, key);
-    if (!PyNumber_Check(value)) {
-        PyErr_Format(DiscsimInputError, "'%s' is not number", key_str); 
-        goto out;
-    }
-    ret = value;
-out:
-    Py_DECREF(key);
-    return ret;
-}
-
 static int
 Simulator_parse_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
-    int j, size;
-    double rate, u, r;
-    PyObject *item, *value;
+    int size;
     size = PyList_Size(py_events);
     if (size == 0) {
         PyErr_SetString(DiscsimInputError, "must have > 0 events"); 
@@ -154,32 +204,7 @@ Simulator_parse_events(Simulator *self, PyObject *py_events)
     }
     self->sim->num_event_classes = size; 
     self->sim->event_classes = PyMem_Malloc(size * sizeof(event_class_t));
-    for (j = 0; j < size; j++) {
-        item = PyList_GetItem(py_events, j);
-        if (!PyDict_Check(item)) {
-            PyErr_SetString(DiscsimInputError, "not a dictionary"); 
-            goto out;
-        }
-        value = get_dict_number(item, "rate");
-        if (value == NULL) {
-            goto out;
-        }
-        rate = PyFloat_AsDouble(value);
-        value = get_dict_number(item, "r");
-        if (value == NULL) {
-            goto out;
-        }
-        r = PyFloat_AsDouble(value);
-        value = get_dict_number(item, "u");
-        if (value == NULL) {
-            goto out;
-        }
-        u = PyFloat_AsDouble(value);
-        self->sim->event_classes[j].rate = rate;
-        self->sim->event_classes[j].r = r;
-        self->sim->event_classes[j].u = u;
-    }
-    ret = 0;
+    ret = discsim_parse_event_classes(py_events, self->sim->event_classes);
 out:
     return ret; 
 }
@@ -736,6 +761,195 @@ static PyTypeObject SimulatorType = {
     (initproc)Simulator_init,      /* tp_init */
 };
 
+/*===================================================================
+ * IdentitySolver 
+ *===================================================================
+ */
+
+static int 
+IdentitySolver_check_nystrom(IdentitySolver *self) 
+{
+    int ret = 0;
+    if (self->nystrom == NULL) {
+        PyErr_SetString(PyExc_SystemError, "nystrom not initialised");
+        ret = -1; 
+    }
+    return ret;
+}
+
+
+
+static int
+IdentitySolver_parse_events(IdentitySolver *self, PyObject *py_events)
+{
+    int ret = -1;
+    event_class_t ec;
+    int size = PyList_Size(py_events);
+
+    if (size != 1) {
+        PyErr_SetString(DiscsimInputError, "must have 1 events"); 
+        goto out;
+    }
+    ret = discsim_parse_event_classes(py_events, &ec); 
+    if (ret != 0) {
+        goto out;
+    }
+    self->nystrom->r = ec.r;
+    self->nystrom->u = ec.u;
+    self->nystrom->rate = ec.rate;
+
+out:
+    return ret; 
+}
+
+
+static int 
+IdentitySolver_check_input(IdentitySolver *self) 
+{
+    int ret = -1;
+    unsigned int j;
+    nystrom_t *nystrom = self->nystrom;
+    event_class_t *e;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    if (nystrom->torus_diameter <= 0.0) {
+        handle_input_error("must have torus_edge > 0");
+        goto out;
+    }
+    if (nystrom->num_parents == 0) {
+        handle_input_error("must have num_parents > 0");
+        goto out;
+    }
+    if (nystrom->num_event_classes == 0) {
+        handle_input_error("at least one event class required");
+        goto out;
+    }
+    for (j = 0; j < nystrom->num_event_classes; j++) {
+        e = &nystrom->event_classes[j];
+        if (e->r <= 0.0 || e->r > nystrom->torus_diameter / 4.0) {
+            handle_input_error("must have 0 < r < L / 4");
+            goto out;
+        }
+        if (e->u <= 0.0 || e->u >= 1.0) {
+            handle_input_error("must have 0 < u < 1");
+            goto out;
+        }
+        if (e->rate <= 0.0) {
+            handle_input_error("must have 0 < rate < 1");
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+    
+
+static void
+IdentitySolver_dealloc(IdentitySolver* self)
+{
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+
+static int
+IdentitySolver_init(IdentitySolver *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int nystrom_ret;
+    static char *kwlist[] = {"event_classes", "quadrature_points", 
+            "torus_diameter", "num_parents", "mutation_rate", "max_x", NULL}; 
+    PyObject *events;
+    nystrom_t *nystrom = PyMem_Malloc(sizeof(nystrom_t));
+    self->nystrom = nystrom; 
+    if (self->nystrom == NULL) {
+        goto out;
+    }
+    memset(self->nystrom, 0, sizeof(nystrom_t));
+    nystrom->nu = 1;
+    nystrom->L = 100;
+    nystrom->mu = 1e-6;
+    nystrom->max_x = 50;
+    nystrom->n = 64;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|IdIdd", kwlist, 
+            &PyList_Type, &events, 
+            &nystrom->n, &nystrom->L, &nystrom->nu, &nystrom->mu, 
+            &nystrom->max_x)) {
+        goto out;
+    }
+    if (IdentitySolver_parse_events(self, events) != 0) {
+        goto out;
+    }
+    if (IdentitySolver_check_input(self) != 0) {
+        goto out;
+    }
+    nystrom_ret = nystrom_alloc(self->nystrom);
+    if (nystrom_ret != 0) {
+        handle_library_error(nystrom_ret);
+        goto out;
+    }
+    nystrom_ret = nystrom_solve(self->nystrom);
+    if (nystrom_ret != 0) {
+        handle_library_error(nystrom_ret);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyMemberDef IdentitySolver_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+
+static PyMethodDef IdentitySolver_methods[] = {
+   {NULL}  /* Sentinel */
+};
+
+
+static PyTypeObject IdentitySolverType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_discsim.IdentitySolver",             /* tp_name */
+    sizeof(IdentitySolver),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)IdentitySolver_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "IdentitySolver objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    IdentitySolver_methods,             /* tp_methods */
+    IdentitySolver_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)IdentitySolver_init,      /* tp_init */
+};
+
+
 
 
 /* Initialisation code supports Python 2.x and 3.x. The framework uses the 
@@ -780,7 +994,14 @@ init_discsim(void)
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
-    
+    IdentitySolverType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&IdentitySolverType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&IdentitySolverType);
+    PyModule_AddObject(module, "IdentitySolver", 
+            (PyObject *) &IdentitySolverType);
+
     DiscsimInputError = PyErr_NewException("_discsim.InputError", NULL,
             NULL);
     Py_INCREF(DiscsimInputError);

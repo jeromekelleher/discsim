@@ -1,9 +1,21 @@
 /*
- * Calculate the probability of identity in state of the disc model 
- * using the Nystrom method.
- *
- * author: Jerome Kelleher <jerome.kelleher@ed.ac.uk>
- */
+** Copyright (C) 2013 Jerome Kelleher <jerome.kelleher@ed.ac.uk>
+**  
+** This file is part of discsim.
+** 
+** discsim is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
+** 
+** discsim is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with discsim.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include <math.h>
 #include <assert.h>
@@ -14,6 +26,7 @@
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_permutation.h>
 
+#include "util.h"
 #include "nystrom.h"
 
 typedef struct {
@@ -161,7 +174,7 @@ intQ2(nystrom_t *self, double x, double R)
 {
     double ret = 0.0;
     double v, error, alpha, beta, gamma, d;
-    double r = self->r;
+    double r = self->event_classes[0].r;
     double r2 = gsl_pow_2(r);
     double x2 = gsl_pow_2(x);
     double R2 = gsl_pow_2(R);
@@ -214,7 +227,7 @@ intQ1(nystrom_t *self, double x, double R)
 {
     double ret = 0.0;
     double error, alpha, nu;
-    double r = self->r;
+    double r = self->event_classes[0].r;
     Q_integral_params_t p;
     gsl_function f;
     p.x = x;
@@ -243,17 +256,19 @@ intQ1(nystrom_t *self, double x, double R)
 static double 
 nystrom_phi(nystrom_t *self, double x)
 {
-    double phi = 2 * self->mu + 2 * self->u * M_PI * gsl_pow_2(self->r) 
-               - gsl_pow_2(self->u) * A2(x, self->r);
+    double mu = self->mutation_rate;
+    double u = self->event_classes[0].u;
+    double r = self->event_classes[0].r;
+    double phi = 2 * mu + 2 * u * M_PI * gsl_pow_2(r) - gsl_pow_2(u) * A2(x, r);
     return phi;
 }
 
 static double 
 nystrom_K(nystrom_t *self, double x, double R)
 {
-    double r = self->r;
-    double u = self->u;
-    int nu = self->nu;
+    double r = self->event_classes[0].r;
+    double u = self->event_classes[0].u;
+    int nu = self->num_parents;
     double K = u * u * disc_distance_pdf(R / r) * (1.0 - 1.0 / nu) * A2(x, r) / r 
             + 4 * u * R * (intQ1(self, x, R) - u * intQ2(self, x, R))
             / (M_PI * gsl_pow_2(r));
@@ -263,7 +278,10 @@ nystrom_K(nystrom_t *self, double x, double R)
 static double 
 nystrom_g(nystrom_t *self, double x)
 {
-    return gsl_pow_2(self->u) * A2(x, self->r) / self->nu;
+    double r = self->event_classes[0].r;
+    double u = self->event_classes[0].u;
+    double nu = self->num_parents;
+    return gsl_pow_2(u) * A2(x, r) / nu;
 }    
 
 /* 
@@ -273,11 +291,11 @@ void
 nystrom_print_state(nystrom_t *self) 
 {
     unsigned int j;
-    printf("r = %f\n", self->r);
-    printf("u = %f\n", self->u);
-    printf("mu = %f\n", self->mu);
-    printf("L = %f\n", self->L);
-    printf("nu = %d\n", self->nu);
+    printf("r = %f\n", self->event_classes[0].r);
+    printf("u = %f\n", self->event_classes[0].u);
+    printf("mu = %f\n", self->mutation_rate);
+    printf("L = %f\n", self->torus_diameter);
+    printf("nu = %d\n", self->num_parents);
     printf("n = %d\n", self->n);
     printf("x = ");
     for (j = 0; j < self->n; j++) {
@@ -291,27 +309,29 @@ nystrom_print_state(nystrom_t *self)
 }
 
 
-nystrom_t *
-nystrom_alloc(double r, double u, double mu, int nu, double L, double max_x,
-        unsigned int n, unsigned int integration_workspace_size,
-        double integration_abserr, double integration_relerr)
+int
+nystrom_alloc(nystrom_t *self)
 {
-    nystrom_t *self = malloc(sizeof(nystrom_t));
+    int ret = 0;
     unsigned int i;
+    unsigned int n = self->n;
     double a = 0.0;
-    double b = max_x;
+    double b = self->max_x;
     double A = (b - a) / 2.0;
     double B = (b + a) / 2.0;
     gsl_integration_glfixed_table *t = gsl_integration_glfixed_table_alloc(n);
-    self->r = r;
-    self->u = u;
-    self->mu = mu * L * L;
-    self->nu = nu;
-    self->L = L;
-    self->n = n;
+    
+    self->integration_rule = GSL_INTEG_GAUSS31; 
+    self->integration_workspace = gsl_integration_workspace_alloc(
+            self->integration_workspace_size);
     self->w = malloc(n * sizeof(double));
     self->x = malloc(n * sizeof(double));
     self->f = malloc(n * sizeof(double));
+    if (t == NULL || self->x == NULL || self->w == NULL || self->f == NULL
+            || self->integration_workspace == NULL) {
+        ret = ERR_ALLOC_FAILED;
+        goto out;
+    }
     for (i = 0; i < n / 2; i++) {
         self->w[i] = t->w[n / 2 - i - 1] * A;
         self->w[n - i - 1] = self->w[i]; 
@@ -319,14 +339,8 @@ nystrom_alloc(double r, double u, double mu, int nu, double L, double max_x,
         self->x[n - i - 1] = B + A * t->x[n / 2 - i - 1];
     }
     gsl_integration_glfixed_table_free(t);
-    /* Set up the numerical integration parameters */
-    self->integration_rule = GSL_INTEG_GAUSS31; 
-    self->integration_workspace_size = integration_workspace_size;
-    self->integration_abserr = integration_abserr;
-    self->integration_relerr = integration_relerr; 
-    self->integration_workspace = gsl_integration_workspace_alloc(
-            self->integration_workspace_size);
-    return self;
+out:
+    return ret;
 }
 
 void
@@ -336,22 +350,30 @@ nystrom_free(nystrom_t *self)
     free(self->x);
     free(self->f);
     gsl_integration_workspace_free(self->integration_workspace);
-    free(self);
 }
 
-void
+int
 nystrom_solve(nystrom_t *self)
 {
+    int ret = 0;
     unsigned int i, j;
     size_t n = self->n;
     double *x = self->x;
     double *w = self->w;
     double K, phi;
     int s;
-    gsl_permutation *p = gsl_permutation_alloc(n);
-    gsl_matrix *kernel = gsl_matrix_alloc(n, n);
-    gsl_vector *gv = gsl_vector_alloc(n);
     gsl_vector_view fvv = gsl_vector_view_array(self->f, n);
+    gsl_permutation *p = NULL;
+    gsl_matrix *kernel = NULL; 
+    gsl_vector *gv = NULL; 
+   
+    p = gsl_permutation_alloc(n);
+    kernel = gsl_matrix_alloc(n, n);
+    gv = gsl_vector_alloc(n);
+    if (p == NULL || kernel == NULL || gv == NULL) {
+        ret = -ERR_ALLOC_FAILED;
+        goto out;
+    }
     for (i = 0; i < n; i++) {
         phi = nystrom_phi(self, x[i]);
         for (j = 0; j < n; j++) {
@@ -362,9 +384,17 @@ nystrom_solve(nystrom_t *self)
     }
     gsl_linalg_LU_decomp(kernel, p, &s);
     gsl_linalg_LU_solve(kernel, p, gv, &(fvv.vector));
-    gsl_permutation_free(p);
-    gsl_matrix_free(kernel);
-    gsl_vector_free(gv);
+out:
+    if (p != NULL) {
+        gsl_permutation_free(p);
+    }
+    if (kernel != NULL) {
+        gsl_matrix_free(kernel);
+    }
+    if (gv != NULL) {
+        gsl_vector_free(gv);
+    }
+    return ret;
 }
 
 

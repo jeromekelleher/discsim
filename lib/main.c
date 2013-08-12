@@ -24,6 +24,7 @@
 
 #include "sim.h"
 #include "util.h"
+#include "nystrom.h"
 
 #include <limits.h>
 #include <float.h>
@@ -222,18 +223,13 @@ read_config(sim_t *self, const char *filename)
     free(config);
 }
 
-
-
-int
-main(int argc, char** argv)
+static int 
+run_sim(const char *config_file)
 {
     int ret;
     int not_done = 1;
     sim_t *self = xcalloc(1, sizeof(sim_t));
-    if (argc != 2) {
-        fatal_error("usage: sim <configuration file>");
-    }
-    read_config(self, argv[1]); 
+    read_config(self, config_file); 
     sim_print_parameters(self);
     ret = sim_alloc(self);
     if (ret != 0) {
@@ -257,12 +253,38 @@ main(int argc, char** argv)
     }
 out:
     if (ret != 0) {
-        printf("error occured: %s\n", sim_error_message(ret));
+        printf("error occured: %s\n", discsim_error_message(ret));
     }   
     sim_free(self);
     free(self->event_classes);
     free(self->sample); 
     free(self);
-
     return EXIT_SUCCESS;
+}
+
+static int
+run_identity(const char *config_file)
+{
+    int ret = 0;
+    // TODO fill in basic runner for identity.
+    return ret;
+}
+    
+
+
+int
+main(int argc, char** argv)
+{
+    int ret;
+    const char *cmd;
+    if (argc != 3) {
+        fatal_error("usage: main sim|identity <configuration file>");
+    }
+    cmd = argv[1];
+    if (strstr(cmd, "sim") != NULL) {
+        ret = run_sim(argv[2]);  
+    } else if  (strstr(cmd, "identity") != NULL) {
+        ret = run_identity(argv[2]);  
+    }
+    return ret;
 }

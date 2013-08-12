@@ -22,20 +22,26 @@
 
 #include <stdlib.h>
 
+#define ERR_ALLOC_FAILED -1
+#define ERR_BAD_PIXEL_SIZE -2 
+#define ERR_OUT_OF_INT_MAP_NODES -3
+#define ERR_OUT_OF_SET_MAP_NODES -4 
+#define ERR_OUT_OF_AVL_SET_NODES -5 
+#define ERR_OUT_OF_INDIVIDUALS -6 
+#define ERR_AVL_OP_FAILED -7
 
-#ifdef DEBUG_ERRORS
-#define ERCS_ERROR_CHECK(r, label) \
-    printf("ERROR_CHECK: %d: %d: %s\n", r, __LINE__, __FILE__); \
-    if (r < 0) { goto label;}
-#else
-#define ERCS_ERROR_CHECK(r, label) \
-    if (r < 0) { goto label;}
-#endif
+typedef struct {
+    double rate;
+    double r;
+    double u;
+} event_class_t;
+
 
 void xfree(void *p);
 void * xmalloc(size_t size);
 void * xcalloc(size_t count, size_t eltsize);
 void * xrealloc(void *ptr, size_t size);
 
+const char * discsim_error_message(int err);
 
 #endif /*__UTIL_H__*/

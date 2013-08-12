@@ -106,7 +106,7 @@ class TestInitialiser(unittest.TestCase):
         self.assertRaises(_discsim.InputError, f, [(0,1)], torus_diameter=1)
 
     def test_random_values(self):
-        num_tests = 10 
+        num_tests = 10
         for j in range(num_tests):
             pixel_size = random.uniform(1, 3)
             torus_diameter = 64 * pixel_size

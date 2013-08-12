@@ -27,35 +27,6 @@
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
 
-const char * 
-sim_error_message(int err)
-{
-    const char *ret = "Unknown error";
-    switch (err) {
-        case ERR_ALLOC_FAILED:
-            ret = "Memory allocation failure";
-            break;
-        case ERR_BAD_PIXEL_SIZE:
-            ret = "Bad pixel size";
-            break;
-        case ERR_OUT_OF_INT_MAP_NODES:
-            ret = "Out of int map nodes";
-            break;
-        case ERR_OUT_OF_SET_MAP_NODES:
-            ret = "Out of set map nodes";
-            break;
-        case ERR_OUT_OF_AVL_SET_NODES:
-            ret = "Out of avl set nodes";
-        case ERR_OUT_OF_INDIVIDUALS:
-            ret = "Out of individuals";
-            break;
-        case ERR_AVL_OP_FAILED:
-            ret = "AVL tree operation failed";
-            break;
-    }
-    return ret;
-}
-
 static int 
 avl_set_compare(const void *pa, const void *pb)
 {

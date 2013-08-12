@@ -27,7 +27,8 @@ discsim_version = parse_version("discsim.py")
 d = "lib/"
  
 _discsim_module = Extension('_discsim', 
-    sources = ["_discsimmodule.c", d + "util.c", d + "sim.c", d + "avl.c"],
+    sources = ["_discsimmodule.c", d + "util.c", d + "sim.c", d + "avl.c", 
+            d + "nystrom.c"],
     libraries = ["gsl", "gslcblas"],
     include_dirs = [d])
 

@@ -21,16 +21,8 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-
-#define ERR_ALLOC_FAILED -1
-#define ERR_BAD_PIXEL_SIZE -2 
-#define ERR_OUT_OF_INT_MAP_NODES -3
-#define ERR_OUT_OF_SET_MAP_NODES -4 
-#define ERR_OUT_OF_AVL_SET_NODES -5 
-#define ERR_OUT_OF_INDIVIDUALS -6 
-#define ERR_AVL_OP_FAILED -7
-
 #include "avl.h"
+#include "util.h"
 
 typedef struct {
     double location[2];
@@ -46,12 +38,6 @@ typedef struct {
     unsigned int key;
     unsigned int value;
 } int_map_value_t;
-
-typedef struct {
-    double rate;
-    double r;
-    double u;
-} event_class_t;
 
 typedef struct {
     double *sample;
@@ -131,5 +117,4 @@ int sim_print_state(sim_t *self, int detail);
 int sim_get_population(sim_t *self, avl_tree_t *pop);
 void sim_free_population(sim_t *self, avl_tree_t *pop);
 
-const char * sim_error_message(int err);
 
