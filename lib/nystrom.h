@@ -21,23 +21,23 @@
 
 typedef struct nystrom_t_t {
     /* parameters */
-    unsigned int n;
+    unsigned int num_quadrature_points;
     unsigned int num_parents;
     unsigned int num_event_classes;
     event_class_t *event_classes;
     double mutation_rate;
     double torus_diameter;
     double max_x;
-    /* Nystrom solution vectors */
+    /* GSL integration parameters */
+    size_t integration_workspace_size;
+    double integration_abserr;
+    double integration_relerr;
+    int integration_rule;
+    /* Internal state */
     double *x;
     double *w;
     double *f;
-    /* GSL integration parameters */
-    size_t integration_workspace_size;
     gsl_integration_workspace *integration_workspace;
-    int integration_rule;
-    double integration_abserr;
-    double integration_relerr;
 } nystrom_t;
 
 int nystrom_alloc(nystrom_t *self);

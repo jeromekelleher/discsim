@@ -296,13 +296,13 @@ nystrom_print_state(nystrom_t *self)
     printf("mu = %f\n", self->mutation_rate);
     printf("L = %f\n", self->torus_diameter);
     printf("nu = %d\n", self->num_parents);
-    printf("n = %d\n", self->n);
+    printf("n = %d\n", self->num_quadrature_points);
     printf("x = ");
-    for (j = 0; j < self->n; j++) {
+    for (j = 0; j < self->num_quadrature_points; j++) {
         printf("%f, ", self->x[j]);
     }
     printf("\nw = ");
-    for (j = 0; j < self->n; j++) {
+    for (j = 0; j < self->num_quadrature_points; j++) {
         printf("%f, ", self->w[j]);
     }
     printf("\n");
@@ -314,13 +314,13 @@ nystrom_alloc(nystrom_t *self)
 {
     int ret = 0;
     unsigned int i;
-    unsigned int n = self->n;
+    unsigned int n = self->num_quadrature_points;
     double a = 0.0;
     double b = self->max_x;
     double A = (b - a) / 2.0;
     double B = (b + a) / 2.0;
     gsl_integration_glfixed_table *t = gsl_integration_glfixed_table_alloc(n);
-    
+    /* this can easily be made a parameter */ 
     self->integration_rule = GSL_INTEG_GAUSS31; 
     self->integration_workspace = gsl_integration_workspace_alloc(
             self->integration_workspace_size);
@@ -357,7 +357,7 @@ nystrom_solve(nystrom_t *self)
 {
     int ret = 0;
     unsigned int i, j;
-    size_t n = self->n;
+    size_t n = self->num_quadrature_points;
     double *x = self->x;
     double *w = self->w;
     double K, phi;
@@ -401,13 +401,14 @@ out:
 double 
 nystrom_interpolate(nystrom_t *self, double x)
 {
-    unsigned int i;
+    unsigned int j;
+    unsigned int n = self->num_quadrature_points;
     double K;
     double sum = 0.0;
     double phi = nystrom_phi(self, x);
-    for (i = 0; i < self->n; i++) {
-        K = nystrom_K(self, x, self->x[i]) / phi;
-        sum += self->w[i] * self->f[i] * K; 
+    for (j = 0; j < n; j++) {
+        K = nystrom_K(self, x, self->x[j]) / phi;
+        sum += self->w[j] * self->f[j] * K; 
     }
     return nystrom_g(self, x) / phi + sum;
 }

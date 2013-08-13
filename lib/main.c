@@ -89,13 +89,15 @@ read_sample(sim_t *self, config_t *config)
     }
 }
 
-static void
-read_events(sim_t *self, config_t *config)
+static event_class_t *
+read_events(config_t *config, unsigned int *num_event_classes_p)
 {
     const char *type;
     double u, r, rate;
     int j;
     int e;
+    unsigned int num_event_classes;
+    event_class_t *event_classes;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "events"); 
     if (setting == NULL) {
@@ -104,12 +106,12 @@ read_events(sim_t *self, config_t *config)
     if (config_setting_is_list(setting) == CONFIG_FALSE) {
         fatal_error("events must be a list");
     }
-    self->num_event_classes = config_setting_length(setting);
-    e = self->num_event_classes;
+    num_event_classes = config_setting_length(setting);
+    e = num_event_classes;
     if (e < 1) {
         fatal_error("events must be > 0");
     }
-    self->event_classes = xmalloc(e * sizeof(event_class_t));
+    event_classes = xmalloc(e * sizeof(event_class_t));
     for (j = 0; j < (int) e; j++) {
         s = config_setting_get_elem(setting, j);
         if (s == NULL) {
@@ -142,9 +144,9 @@ read_events(sim_t *self, config_t *config)
                 fatal_error("r not specified");
             }
             r = config_setting_get_float(t);
-            self->event_classes[j].r = r;
-            self->event_classes[j].u = u;
-            self->event_classes[j].rate = rate;
+            event_classes[j].r = r;
+            event_classes[j].u = u;
+            event_classes[j].rate = rate;
             if (r <= 0) {
                 fatal_error("r must be positive");
             }
@@ -155,12 +157,13 @@ read_events(sim_t *self, config_t *config)
         } else {
             fatal_error("unknown event type '%s'", type);
         }
-        
     }
+    *num_event_classes_p = num_event_classes;
+    return event_classes;
 }
 
 static void 
-read_config(sim_t *self, const char *filename)
+read_sim_config(sim_t *self, const char *filename)
 {
     int err;
     libconfig_int tmp;
@@ -216,7 +219,7 @@ read_config(sim_t *self, const char *filename)
         fatal_error("recombination_probability is a required parameter");
     }
 
-    read_events(self, config);    
+    self->event_classes = read_events(config, &self->num_event_classes);    
     read_sample(self, config);
 
     config_destroy(config);
@@ -229,7 +232,7 @@ run_sim(const char *config_file)
     int ret;
     int not_done = 1;
     sim_t *self = xcalloc(1, sizeof(sim_t));
-    read_config(self, config_file); 
+    read_sim_config(self, config_file); 
     sim_print_parameters(self);
     ret = sim_alloc(self);
     if (ret != 0) {
@@ -262,11 +265,88 @@ out:
     return EXIT_SUCCESS;
 }
 
+static void 
+read_identity_config(nystrom_t *self, const char *filename)
+{
+    int err;
+    libconfig_int tmp;
+    config_t *config = xmalloc(sizeof(config_t)); 
+    config_init(config);
+    err = config_read_file(config, filename);
+    if (err == CONFIG_FALSE) {
+        fatal_error("configuration error:%s at line %d in file %s\n", 
+                config_error_text(config), config_error_line(config), 
+                filename);
+    }
+    if (config_lookup_int(config, "num_parents", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("num_parents is a required parameter");
+    }
+    self->num_parents = tmp;
+    if (config_lookup_int(config, "num_quadrature_points", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("num_quadrature_points is a required parameter");
+    }
+    self->num_quadrature_points = tmp;
+    if (config_lookup_int(config, "integration_workspace_size", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("integration_workspace_size is a required parameter");
+    }
+    self->integration_workspace_size = tmp;
+    if (config_lookup_float(config, "torus_diameter", &self->torus_diameter) 
+            == CONFIG_FALSE) {
+        fatal_error("torus_diameter is a required parameter");
+    }
+    if (config_lookup_float(config, "mutation_rate", 
+                &self->mutation_rate) == CONFIG_FALSE) {
+        fatal_error("mutation_rate is a required parameter");
+    }
+    if (config_lookup_float(config, "max_x", &self->max_x) == CONFIG_FALSE) {
+        fatal_error("max_x is a required parameter");
+    }
+    if (config_lookup_float(config, "integration_abserr", 
+                &self->integration_abserr) == CONFIG_FALSE) {
+        fatal_error("integration_abserr is a required parameter");
+    }
+    if (config_lookup_float(config, "integration_relerr", 
+                &self->integration_relerr) == CONFIG_FALSE) {
+        fatal_error("integration_relerr is a required parameter");
+    }
+    self->event_classes = read_events(config, &self->num_event_classes);    
+
+    config_destroy(config);
+    free(config);
+}
+
+
+
 static int
 run_identity(const char *config_file)
 {
     int ret = 0;
-    // TODO fill in basic runner for identity.
+    double x;
+    nystrom_t *self = xmalloc(sizeof(nystrom_t));
+    read_identity_config(self, config_file); 
+    ret = nystrom_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = nystrom_solve(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (x = 0.0; x < self->max_x; x += 1.0) {
+        printf("%f\t%f\n", x, nystrom_interpolate(self, x));
+    }
+
+
+out:
+    if (ret != 0) {
+        printf("error occured: %s\n", discsim_error_message(ret));
+    }
+    nystrom_free(self);
+    free(self->event_classes);
+    free(self);
     return ret;
 }
     
