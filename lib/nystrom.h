@@ -19,7 +19,7 @@
 
 #include <gsl/gsl_integration.h>
 
-typedef struct nystrom_t_t {
+typedef struct {
     /* parameters */
     unsigned int num_quadrature_points;
     unsigned int num_parents;
@@ -29,7 +29,7 @@ typedef struct nystrom_t_t {
     double torus_diameter;
     double max_x;
     /* GSL integration parameters */
-    size_t integration_workspace_size;
+    unsigned int integration_workspace_size;
     double integration_abserr;
     double integration_relerr;
     int integration_rule;

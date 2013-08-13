@@ -38,6 +38,8 @@ class TestInitialiser(unittest.TestCase):
         sample = [(0,0), (0,0)]
         def f(x):
             _discsim.Simulator(sample, x, torus_diameter=10)
+        def g(x):
+            _discsim.IdentitySolver(x, torus_diameter=10)
         self.assertRaises(_discsim.InputError, f, []) 
         self.assertRaises(_discsim.InputError, f, [{}])
         self.assertRaises(_discsim.InputError, f, [[]])
@@ -49,18 +51,20 @@ class TestInitialiser(unittest.TestCase):
         for r in radii:
             e["r"] = r 
             self.assertRaises(_discsim.InputError, f, [e])
-        
+            self.assertRaises(_discsim.InputError, g, [e])
         impacts = ["12", -1, 0, 1, 100]
         e["r"] = 1
         for u in impacts: 
             e["u"] = u
             self.assertRaises(_discsim.InputError, f, [e])
+            self.assertRaises(_discsim.InputError, g, [e])
         e["u"] = 0.5
         for rate in ["a", None, -1000, 0]:
             e["rate"] = rate
             self.assertRaises(_discsim.InputError, f, [e])
+            self.assertRaises(_discsim.InputError, g, [e])
 
-    def test_bad_parameters(self):
+    def test_simulation_bad_parameters(self):
         sample = [(0,0), (0,0)]
         events = [{"r":0.5, "u":0.5, "rate":0.5}]
         def f(**kwargs):
@@ -105,68 +109,108 @@ class TestInitialiser(unittest.TestCase):
         self.assertRaises(_discsim.InputError, f, [(-1,0)], torus_diameter=1)
         self.assertRaises(_discsim.InputError, f, [(0,1)], torus_diameter=1)
 
+    def check_random_simulation(self):
+        pixel_size = random.uniform(1, 3)
+        torus_diameter = 64 * pixel_size
+        rho = random.uniform(0, 1)
+        random_seed = random.randint(0, 2**32)
+        num_parents = random.randint(1, 5)
+        num_loci = random.randint(1, 100)
+        sample_size = random.randint(2, 50)
+        max_occupancy = random.randint(sample_size, 100)
+        max_population_size = random.randint(2 * sample_size, 100)
+        max_time = random.uniform(1, 1e6)
+        sample = []
+        for k in range(sample_size):
+            x = random.uniform(0, torus_diameter)
+            y = random.uniform(0, torus_diameter)
+            sample.append((x, y))
+        events = [{"r":random.uniform(0.1, 10), 
+            "u":random.uniform(0, 1), 
+            "rate":random.uniform(0, 1000)}]
+        s = _discsim.Simulator(sample, events, num_loci=num_loci, 
+                torus_diameter=torus_diameter, pixel_size=pixel_size,
+                recombination_probability=rho, num_parents=num_parents,
+                max_population_size=max_population_size, 
+                max_occupancy=max_occupancy, random_seed=random_seed, 
+                max_time=max_time)
+        self.assertEqual(s.get_num_parents(), num_parents)
+        self.assertEqual(s.get_num_loci(), num_loci)
+        self.assertEqual(s.get_max_population_size(), max_population_size)
+        self.assertEqual(s.get_max_occupancy(), max_occupancy)
+        self.assertEqual(s.get_random_seed(), random_seed)
+        self.assertEqual(s.get_torus_diameter(), torus_diameter)
+        self.assertEqual(s.get_pixel_size(), pixel_size)
+        self.assertEqual(s.get_max_time(), max_time)
+        self.assertEqual(s.get_recombination_probability(), rho)
+        pop = s.get_population()
+        locations = [x for x, a in pop]
+        ancestry = [a for x, a in pop]
+        self.assertEqual(len(pop), sample_size)
+        for x in sample:
+            self.assertTrue(x in locations)
+        for a in ancestry:
+            self.assertEqual(len(a), num_loci)
+            d = {}
+            for v in a.values():
+                if v not in d:
+                    d[v] = 0
+                d[v] += 1
+            self.assertEqual(len(d), 1)
+        pi, tau = s.get_history() 
+        self.assertEqual(num_loci, len(pi))
+        self.assertEqual(num_loci, len(tau))
+        for l in range(num_loci):
+            self.assertEqual(2 * sample_size, len(pi[l]))
+            self.assertEqual(2 * sample_size, len(tau[l]))
+            for a, t in zip(pi[l], tau[l]):
+                self.assertEqual(a, 0)
+                self.assertEqual(a, 0.0)
+            
+        self.assertEqual(s.get_time(), 0.0)
+        self.assertEqual(s.get_num_reproduction_events(), 0)
+
+    def check_random_identity(self):
+        torus_diameter = random.uniform(40, 100)
+        num_parents = random.randint(1, 5)
+        mutation_rate = 10**random.randint(0, 10) 
+        max_x = random.uniform(0, torus_diameter / 2)
+        integration_workspace_size = random.randint(1, 1000)
+        num_quadrature_points = random.randint(16, 1000)
+        integration_abserr = 0
+        integration_relerr = 0
+        if random.random() < 0.5:
+            integration_abserr = 10**random.randint(0, 10) 
+        else: 
+            integration_relserr = 10**random.randint(0, 4) 
+        events = [{"r":random.uniform(0.1, 10), 
+            "u":random.uniform(0, 1), 
+            "rate":random.uniform(0, 1000)}]
+        s = _discsim.IdentitySolver(events, 
+                torus_diameter=torus_diameter,
+                num_quadrature_points=num_quadrature_points,
+                integration_abserr=integration_abserr,
+                integration_relerr=integration_relerr,
+                integration_workspace_size=integration_workspace_size,
+                max_x=max_x,
+                mutation_rate=mutation_rate,
+                num_parents=num_parents)
+        self.assertEqual(s.get_num_parents(), num_parents)
+        self.assertEqual(s.get_torus_diameter(), torus_diameter)
+        self.assertEqual(s.get_mutation_rate(), mutation_rate)
+        self.assertEqual(s.get_max_x(), max_x)
+        self.assertEqual(s.get_integration_workspace_size(), 
+                integration_workspace_size)
+        self.assertEqual(s.get_integration_abserr(), integration_abserr)
+        self.assertEqual(s.get_integration_relerr(), integration_relerr)
+        self.assertEqual(s.get_num_quadrature_points(), num_quadrature_points)
+   
+
     def test_random_values(self):
         num_tests = 10
         for j in range(num_tests):
-            pixel_size = random.uniform(1, 3)
-            torus_diameter = 64 * pixel_size
-            rho = random.uniform(0, 1)
-            random_seed = random.randint(0, 2**32)
-            num_parents = random.randint(1, 5)
-            num_loci = random.randint(1, 100)
-            sample_size = random.randint(2, 50)
-            max_occupancy = random.randint(sample_size, 100)
-            max_population_size = random.randint(2 * sample_size, 100)
-            max_time = random.uniform(1, 1e6)
-            sample = []
-            for k in range(sample_size):
-                x = random.uniform(0, torus_diameter)
-                y = random.uniform(0, torus_diameter)
-                sample.append((x, y))
-            events = [{"r":random.uniform(0.1, 10), 
-                "u":random.uniform(0, 1), 
-                "rate":random.uniform(0, 1000)}]
-            s = _discsim.Simulator(sample, events, num_loci=num_loci, 
-                    torus_diameter=torus_diameter, pixel_size=pixel_size,
-                    recombination_probability=rho, num_parents=num_parents,
-                    max_population_size=max_population_size, 
-                    max_occupancy=max_occupancy, random_seed=random_seed, 
-                    max_time=max_time)
-            self.assertEqual(s.get_num_parents(), num_parents)
-            self.assertEqual(s.get_num_loci(), num_loci)
-            self.assertEqual(s.get_max_population_size(), max_population_size)
-            self.assertEqual(s.get_max_occupancy(), max_occupancy)
-            self.assertEqual(s.get_random_seed(), random_seed)
-            self.assertEqual(s.get_torus_diameter(), torus_diameter)
-            self.assertEqual(s.get_pixel_size(), pixel_size)
-            self.assertEqual(s.get_max_time(), max_time)
-            self.assertEqual(s.get_recombination_probability(), rho)
-            pop = s.get_population()
-            locations = [x for x, a in pop]
-            ancestry = [a for x, a in pop]
-            self.assertEqual(len(pop), sample_size)
-            for x in sample:
-                self.assertTrue(x in locations)
-            for a in ancestry:
-                self.assertEqual(len(a), num_loci)
-                d = {}
-                for v in a.values():
-                    if v not in d:
-                        d[v] = 0
-                    d[v] += 1
-                self.assertEqual(len(d), 1)
-            pi, tau = s.get_history() 
-            self.assertEqual(num_loci, len(pi))
-            self.assertEqual(num_loci, len(tau))
-            for l in range(num_loci):
-                self.assertEqual(2 * sample_size, len(pi[l]))
-                self.assertEqual(2 * sample_size, len(tau[l]))
-                for a, t in zip(pi[l], tau[l]):
-                    self.assertEqual(a, 0)
-                    self.assertEqual(a, 0.0)
-                
-            self.assertEqual(s.get_time(), 0.0)
-            self.assertEqual(s.get_num_reproduction_events(), 0)
+            self.check_random_simulation()
+            self.check_random_identity()
 
 class TestSimulation(unittest.TestCase):
     """
@@ -254,7 +298,26 @@ class TestSimulation(unittest.TestCase):
                 pi, tau = sim.get_history()
                 self.check_single_locus_history(pi, tau) 
 
+class TestIdentity(unittest.TestCase):
+    """
+    Tests the identity calculator.
+    """
 
+    def test_solve(self):
+        events = [{"r":1, "u":0.5, "rate":1}]
+        s = _discsim.IdentitySolver(events, 
+                torus_diameter=50,
+                num_quadrature_points=128,
+                integration_abserr=1e-6,
+                integration_relerr=0,
+                integration_workspace_size=1000,
+                max_x=25,
+                mutation_rate=1e-6,
+                num_parents=1)
+        fx_b = [s.interpolate(x) for x in range(10)]
+        s.solve()
+        fx_a = [s.interpolate(x) for x in range(10)]
+        self.assertNotEqual(fx_b, fx_a)
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] "

@@ -1119,7 +1119,6 @@ sim_simulate(sim_t *self, uint64_t max_events)
     }
     while (self->ancestral_material > self->num_loci && self->time < self->max_time
             && events < max_events) {
-        events++;
         /* first calculate the rate of (potential) reproduction events */
         Lambda = 0.0;
         max_occupancy = 0;
@@ -1146,6 +1145,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
             if (ret != 0) {
                 goto out;
             }
+            events++;
         } else {
             /* this is a reproduction event */
             occupancy = 1 + probability_list_select(p, max_occupancy, 
@@ -1179,6 +1179,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
             jump_proba = sim_ubar(self, S_size) / sim_ubar(self, occupancy); 
             assert(jump_proba <= 1.0);
             if (gsl_rng_uniform(self->rng) < jump_proba) {
+                events++;
                 self->num_reproduction_events++;
                 self->num_children = gsl_ran_discrete(self->rng, 
                         self->beta_distributions[S_size]);

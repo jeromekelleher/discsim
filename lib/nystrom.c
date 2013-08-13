@@ -313,7 +313,7 @@ int
 nystrom_alloc(nystrom_t *self)
 {
     int ret = 0;
-    unsigned int i;
+    unsigned int j;
     unsigned int n = self->num_quadrature_points;
     double a = 0.0;
     double b = self->max_x;
@@ -332,13 +332,15 @@ nystrom_alloc(nystrom_t *self)
         ret = ERR_ALLOC_FAILED;
         goto out;
     }
-    for (i = 0; i < n / 2; i++) {
-        self->w[i] = t->w[n / 2 - i - 1] * A;
-        self->w[n - i - 1] = self->w[i]; 
-        self->x[i] = B - A * t->x[n / 2 - i - 1];
-        self->x[n - i - 1] = B + A * t->x[n / 2 - i - 1];
+    for (j = 0; j < n / 2; j++) {
+        self->w[j] = t->w[n / 2 - j - 1] * A;
+        self->w[n - j - 1] = self->w[j]; 
+        self->x[j] = B - A * t->x[n / 2 - j - 1];
+        self->x[n - j - 1] = B + A * t->x[n / 2 - j - 1];
     }
-    gsl_integration_glfixed_table_free(t);
+    for (j = 0; j < n; j++) {
+        self->f[j] = 0.0;
+    }   
 out:
     return ret;
 }

@@ -204,6 +204,10 @@ Simulator_parse_events(Simulator *self, PyObject *py_events)
     }
     self->sim->num_event_classes = size; 
     self->sim->event_classes = PyMem_Malloc(size * sizeof(event_class_t));
+    if (self->sim->event_classes == NULL) {
+        ret = ERR_ALLOC_FAILED; 
+        goto out;
+    }
     ret = discsim_parse_event_classes(py_events, self->sim->event_classes);
 out:
     return ret; 
@@ -783,21 +787,23 @@ static int
 IdentitySolver_parse_events(IdentitySolver *self, PyObject *py_events)
 {
     int ret = -1;
-    event_class_t ec;
+    event_class_t *ec;
     int size = PyList_Size(py_events);
-
     if (size != 1) {
         PyErr_SetString(DiscsimInputError, "must have 1 events"); 
         goto out;
     }
-    ret = discsim_parse_event_classes(py_events, &ec); 
+    ec = PyMem_Malloc(size * sizeof(event_class_t));
+    if (ec == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    ret = discsim_parse_event_classes(py_events, ec); 
     if (ret != 0) {
         goto out;
     }
-    self->nystrom->r = ec.r;
-    self->nystrom->u = ec.u;
-    self->nystrom->rate = ec.rate;
-
+    self->nystrom->event_classes = ec;
+    self->nystrom->num_event_classes = size;
 out:
     return ret; 
 }
@@ -850,6 +856,14 @@ out:
 static void
 IdentitySolver_dealloc(IdentitySolver* self)
 {
+    if (self->nystrom != NULL) {
+        if (self->nystrom->event_classes != NULL) {
+            PyMem_Free(self->nystrom->event_classes);
+        }
+        nystrom_free(self->nystrom);
+        PyMem_Free(self->nystrom);
+    }
+    
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -859,8 +873,10 @@ IdentitySolver_init(IdentitySolver *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int nystrom_ret;
-    static char *kwlist[] = {"event_classes", "quadrature_points", 
-            "torus_diameter", "num_parents", "mutation_rate", "max_x", NULL}; 
+    static char *kwlist[] = {"event_classes", "num_quadrature_points", 
+            "torus_diameter", "num_parents", "mutation_rate", "max_x", 
+            "integration_workspace_size", "integration_abserr", 
+            "integration_relerr", NULL}; 
     PyObject *events;
     nystrom_t *nystrom = PyMem_Malloc(sizeof(nystrom_t));
     self->nystrom = nystrom; 
@@ -868,15 +884,21 @@ IdentitySolver_init(IdentitySolver *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->nystrom, 0, sizeof(nystrom_t));
-    nystrom->nu = 1;
-    nystrom->L = 100;
-    nystrom->mu = 1e-6;
+    nystrom->num_parents = 1;
+    nystrom->torus_diameter = 100;
+    nystrom->mutation_rate = 1e-6;
     nystrom->max_x = 50;
-    nystrom->n = 64;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|IdIdd", kwlist, 
+    nystrom->num_quadrature_points = 64;
+    nystrom->integration_workspace_size = 100;
+    nystrom->integration_abserr = 1e-6;
+    nystrom->integration_relerr = 0.0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|IdIddIdd", kwlist, 
             &PyList_Type, &events, 
-            &nystrom->n, &nystrom->L, &nystrom->nu, &nystrom->mu, 
-            &nystrom->max_x)) {
+            &nystrom->num_quadrature_points, &nystrom->torus_diameter, 
+            &nystrom->num_parents, &nystrom->mutation_rate, 
+            &nystrom->max_x, &nystrom->integration_workspace_size, 
+            &nystrom->integration_abserr, &nystrom->integration_relerr)) {
         goto out;
     }
     if (IdentitySolver_parse_events(self, events) != 0) {
@@ -890,12 +912,8 @@ IdentitySolver_init(IdentitySolver *self, PyObject *args, PyObject *kwds)
         handle_library_error(nystrom_ret);
         goto out;
     }
-    nystrom_ret = nystrom_solve(self->nystrom);
-    if (nystrom_ret != 0) {
-        handle_library_error(nystrom_ret);
-        goto out;
-    }
-    ret = 0;
+    
+       ret = 0;
 out:
     return ret;
 }
@@ -904,8 +922,167 @@ static PyMemberDef IdentitySolver_members[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyObject *
+IdentitySolver_solve(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    int nystrom_ret = 0;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    nystrom_ret = nystrom_solve(self->nystrom);
+    if (nystrom_ret != 0) {
+        handle_library_error(nystrom_ret);
+        goto out;
+    }
+    ret = Py_None;
+    Py_INCREF(ret);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_interpolate(IdentitySolver *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double x, fx;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &x)) {
+        goto out;
+    }
+    fx = nystrom_interpolate(self->nystrom, x);
+    ret = Py_BuildValue("d", fx);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_torus_diameter(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->nystrom->torus_diameter);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_integration_abserr(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->nystrom->integration_abserr);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_integration_relerr(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->nystrom->integration_relerr);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_max_x(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->nystrom->max_x);
+out:
+    return ret; 
+}
+
+
+static PyObject *
+IdentitySolver_get_mutation_rate(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->nystrom->mutation_rate);
+out:
+    return ret; 
+}
+
+
+static PyObject *
+IdentitySolver_get_num_parents(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->nystrom->num_parents);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_num_quadrature_points(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->nystrom->num_quadrature_points);
+out:
+    return ret; 
+}
+
+static PyObject *
+IdentitySolver_get_integration_workspace_size(IdentitySolver *self)
+{
+    PyObject *ret = NULL;
+    if (IdentitySolver_check_nystrom(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->nystrom->integration_workspace_size);
+out:
+    return ret; 
+}
+
+
 
 static PyMethodDef IdentitySolver_methods[] = {
+    {"interpolate", (PyCFunction) IdentitySolver_interpolate, 
+            METH_VARARGS, "interpolates the solution for a given x" },
+    {"solve", (PyCFunction) IdentitySolver_solve, 
+            METH_NOARGS, "solves the equation" },
+    {"get_torus_diameter", (PyCFunction) IdentitySolver_get_torus_diameter, 
+            METH_NOARGS, "Returns the torus diameter" },
+    {"get_mutation_rate", (PyCFunction) IdentitySolver_get_mutation_rate, 
+            METH_NOARGS, "Returns the mutation rate" },
+    {"get_max_x", (PyCFunction) IdentitySolver_get_max_x, 
+            METH_NOARGS, "Returns the maximum interpolation argument" },
+    {"get_integration_abserr", 
+            (PyCFunction) IdentitySolver_get_integration_abserr, 
+            METH_NOARGS, "Returns the integration absolute error target" },
+    {"get_integration_relerr", 
+            (PyCFunction) IdentitySolver_get_integration_relerr, 
+            METH_NOARGS, "Returns the integration relative error target" },
+    {"get_num_parents", (PyCFunction) IdentitySolver_get_num_parents, 
+            METH_NOARGS, "Returns the number of parents"},
+    {"get_num_quadrature_points", 
+            (PyCFunction) IdentitySolver_get_num_quadrature_points, 
+            METH_NOARGS, "Returns the number of quadrature points"},
+    {"get_integration_workspace_size", 
+            (PyCFunction) IdentitySolver_get_integration_workspace_size, 
+            METH_NOARGS, "Returns the GSL integration workspace size"},
    {NULL}  /* Sentinel */
 };
 
