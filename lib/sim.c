@@ -1097,7 +1097,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
 {
     int ret = 0;
     unsigned int j, k, pixel, max_occupancy, occupancy, pixel_count, v[2];
-    double r = self->event_classes[0].rate;
+    double r = self->event_classes[0].r;
     double lambda = self->event_classes[0].rate;
     double non_repr_rate, total_rate;
     double Lambda_const = lambda * gsl_pow_2(self->pixel_size / self->torus_diameter);
