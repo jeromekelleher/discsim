@@ -488,7 +488,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_recombination_probability(Simulator  *self)
+Simulator_get_recombination_probability(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -498,6 +498,42 @@ Simulator_get_recombination_probability(Simulator  *self)
 out:
     return ret; 
 }
+
+static PyObject *
+Simulator_get_event_classes(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *d = NULL;
+    unsigned int j;
+    event_class_t *e;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    l = PyList_New(self->sim->num_event_classes);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < self->sim->num_event_classes; j++) {
+        e = &self->sim->event_classes[j];
+        d = Py_BuildValue("{s:d,s:d,s:d}", "r", e->r, "u", e->u, 
+                "rate", e->rate);
+        if (d == NULL) {
+            goto out;
+        }
+        if (PyList_SetItem(l, j, d) != 0) {
+            goto out;
+        }
+    }
+    ret = l;
+    l = NULL;
+out:
+    Py_XDECREF(l);
+    return ret; 
+}
+
+
 
 static PyObject *
 Simulator_individual_to_python(Simulator *self, individual_t *ind)
@@ -714,6 +750,8 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_probability", 
             (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS, 
             "Returns the probability of recombination between adjacent loci" },
+    {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS, 
+            "Returns the event classes" },
     {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS, 
             "Returns the state of the ancestral population" },
     {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS, 
