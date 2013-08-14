@@ -120,7 +120,7 @@ class TestInitialiser(unittest.TestCase):
                     torus_diameter=20, pixel_size=1,
                     recombination_probability=0.5, num_parents=2,
                     max_population_size=max_population_size, 
-                    max_occupancy=max_occupancy:)
+                    max_occupancy=max_occupancy)
             return sim
         s = f(3, 1000)
         self.assertRaises(_discsim.LibraryError, s.run, 100)
@@ -323,6 +323,26 @@ class TestSimulation(unittest.TestCase):
                 self.assertTrue(sim.run()) 
                 pi, tau = sim.get_history()
                 self.check_single_locus_history(pi, tau) 
+
+class TestMultiLocusSimulation(unittest.TestCase):
+    """
+    Test the multilocus simulation for various errors.
+    """
+
+    def test_memory(self):
+        n = 100
+        sample = [(0,0), (0,0)]
+        events = [{"r":1, "u":0.01, "rate":1}]
+        s = _discsim.Simulator(sample, events, torus_diameter=100, 
+                pixel_size=2, max_occupancy=1000, 
+                max_population_size=10**5,
+                num_parents=2, num_loci=10**5)
+        # The rapidly growing population will make memory leaks obvious 
+        for j in range(n):
+            s.run(1000)
+            pop = s.get_population()
+     
+
 
 class TestIdentity(unittest.TestCase):
     """

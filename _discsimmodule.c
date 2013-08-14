@@ -541,6 +541,7 @@ Simulator_individual_to_python(Simulator *self, individual_t *ind)
 {
     PyObject *ret = NULL; 
     PyObject *key, *value;
+    int status;
     double *x = ind->location;
     avl_node_t *node;
     int_map_value_t *imv;
@@ -564,7 +565,12 @@ Simulator_individual_to_python(Simulator *self, individual_t *ind)
             Py_DECREF(key);
             goto out;
         }
-        PyDict_SetItem(ancestry, key, value); 
+        status = PyDict_SetItem(ancestry, key, value);
+        Py_DECREF(key);
+        Py_DECREF(value);
+        if (status != 0) {
+            goto out;
+        }
     }
     ret = PyTuple_Pack(2, loc, ancestry);
     if (ret == NULL) {
@@ -613,7 +619,11 @@ Simulator_get_population(Simulator  *self)
         int_ptr = (uintptr_t) id;
         ind = (individual_t *) int_ptr;
         py_ind = Simulator_individual_to_python(self, ind);
+        if (py_ind == NULL) {
+            goto out;
+        }
         if (PyList_SetItem(l, j, py_ind) != 0) {
+            Py_DECREF(py_ind);
             goto out;
         }
         j++;
