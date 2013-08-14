@@ -96,6 +96,9 @@ discsim_error_message(int err)
         case ERR_AVL_OP_FAILED:
             ret = "AVL tree operation failed";
             break;
+        case ERR_MAX_OCCUPANCY_EXCEEDED:
+            ret = "max occupancy exceeded";
+            break;
     }
     return ret;
 }

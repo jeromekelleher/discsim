@@ -111,6 +111,27 @@ class TestInitialiser(unittest.TestCase):
         self.assertRaises(_discsim.InputError, f, [(-1,0)], torus_diameter=1)
         self.assertRaises(_discsim.InputError, f, [(0,1)], torus_diameter=1)
 
+    def test_out_of_memory(self):
+        events = [{"r":0.5, "u":0.5, "rate":0.5}]
+        sample = [(0,0), (0,0)]
+        num_loci = 100
+        def f(max_occupancy, max_population_size):
+            sim = _discsim.Simulator(sample, events, num_loci=num_loci, 
+                    torus_diameter=20, pixel_size=1,
+                    recombination_probability=0.5, num_parents=2,
+                    max_population_size=max_population_size, 
+                    max_occupancy=max_occupancy:)
+            return sim
+        s = f(3, 1000)
+        self.assertRaises(_discsim.LibraryError, s.run, 100)
+        self.assertRaises(_discsim.LibraryError, s.run, 1)
+        s = f(100, 4)
+        self.assertRaises(_discsim.LibraryError, s.run, 100)
+        self.assertRaises(_discsim.LibraryError, s.run, 1)
+        s = f(10, 1000)
+        s.run(5)
+        self.assertRaises(_discsim.LibraryError, s.run, 1000)
+
     def check_random_simulation(self):
         pixel_size = random.uniform(1, 3)
         torus_diameter = 64 * pixel_size
@@ -211,7 +232,7 @@ class TestInitialiser(unittest.TestCase):
    
 
     def test_random_values(self):
-        num_tests = 1000
+        num_tests = 10
         for j in range(num_tests):
             self.check_random_simulation()
             # TODO fix memory leak

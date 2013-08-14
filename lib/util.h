@@ -29,6 +29,7 @@
 #define ERR_OUT_OF_AVL_SET_NODES -5 
 #define ERR_OUT_OF_INDIVIDUALS -6 
 #define ERR_AVL_OP_FAILED -7
+#define ERR_MAX_OCCUPANCY_EXCEEDED -8
 
 typedef struct {
     double rate;

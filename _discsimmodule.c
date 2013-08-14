@@ -226,6 +226,7 @@ Simulator_dealloc(Simulator* self)
         }
         sim_free(self->sim);
         PyMem_Free(self->sim);
+        self->sim = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }

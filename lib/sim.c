@@ -720,10 +720,11 @@ out:
 }
 
 
-static void 
+static int 
 sim_remove_individual_from_pixel(sim_t *self, unsigned int pixel, 
         individual_t *ind) 
 {
+    int ret = 0;
     avl_node_t *node;
     uintptr_t id = (uintptr_t) ind;
     unsigned int h;
@@ -733,21 +734,32 @@ sim_remove_individual_from_pixel(sim_t *self, unsigned int pixel,
     avl_unlink_node(&self->P[pixel], node);
     sim_free_avl_set_node(self, node);
     h = avl_count(&self->P[pixel]);
-    sim_add_pixel_to_occupancy(self, h, pixel);
-    sim_remove_pixel_from_occupancy(self, h + 1, pixel);
+    ret = sim_add_pixel_to_occupancy(self, h, pixel);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sim_remove_pixel_from_occupancy(self, h + 1, pixel);
+out:
+    return ret;
 }
 
-static void 
+static int 
 sim_remove_individual(sim_t *self, individual_t *ind)
 {
+    int ret = 0;
     unsigned int j, pixel;
     sim_get_disc_pixels(self, ind->location); 
     for (j = 1; j <= self->pixel_buffer[0]; j++) {
         pixel = self->pixel_buffer[j];
-        sim_remove_individual_from_pixel(self, pixel, ind);
+        ret = sim_remove_individual_from_pixel(self, pixel, ind);
+        if (ret != 0) {
+            goto out;
+        }
     }
     sim_free_individual(self, ind);
     self->population_size--;
+out:
+    return ret;
 
 }
 /*
@@ -1008,7 +1020,10 @@ sim_complete_event(sim_t *self, double *z, double r)
         goto out;
     }
     for (j = 0; j < self->num_children; j++) {
-        sim_remove_individual(self, self->child_buffer[j]);
+        ret = sim_remove_individual(self, self->child_buffer[j]);
+        if (ret != 0) {
+            goto out;
+        }
     }
     /* add in the parents, if they have any ancestral material */
     for (j = 0; j < self->num_parents; j++) {
@@ -1127,7 +1142,10 @@ sim_simulate(sim_t *self, uint64_t max_events)
             smv = (set_map_value_t *) node->item;
             occupancy = smv->key;
             pixel_count = avl_count(&smv->value);
-            assert(occupancy <= self->max_occupancy);
+            if (occupancy >= self->max_occupancy) {
+                ret = ERR_MAX_OCCUPANCY_EXCEEDED; 
+                goto out;
+            }
             p[occupancy - 1] = pixel_count * sim_ubar(self, occupancy);
             Lambda += p[occupancy - 1]; 
             if (occupancy > max_occupancy) {
