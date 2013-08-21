@@ -1079,19 +1079,15 @@ sim_non_reproduction_event(sim_t *self)
     u = self->event_classes[j].u;
     z[0] = L * gsl_rng_uniform(self->rng);
     z[1] = L * gsl_rng_uniform(self->rng);
-    //printf("non reproduction\n");
-    //printf("Event class %d: r=%f u=%f\n", j, r, u);
     ret = sim_get_large_event_children(self, z, r, u);
     if (ret != 0) {
         goto out;
     }
-    //printf("at (%f,%f): %d\n", z[0], z[1], self->num_children); 
     ret = sim_complete_event(self, z, r);
-    self->num_non_reproduction_events++;
     if (ret != 0) {
         goto out;
     }
-
+    self->num_non_reproduction_events++;
 out:
     free(p);
     return ret;
@@ -1132,28 +1128,33 @@ sim_simulate(sim_t *self, uint64_t max_events)
     for (j = 1; j < self->num_event_classes; j++) {
         non_repr_rate += self->event_classes[j].rate;
     }
+    /* we use Lambda = -1 to indicate that the state of the sample has 
+     * changed and so we need to recalculate the rate of events */
+    Lambda = -1.0;
+    max_occupancy = 0;
     while (self->ancestral_material > self->num_loci && self->time < self->max_time
             && events < max_events) {
         /* first calculate the rate of (potential) reproduction events */
-        Lambda = 0.0;
-        max_occupancy = 0;
-        memset(p, 0, self->max_occupancy * sizeof(double)); 
-        for (node = self->Q.head; node != NULL; node = node->next) {
-            smv = (set_map_value_t *) node->item;
-            occupancy = smv->key;
-            pixel_count = avl_count(&smv->value);
-            if (occupancy >= self->max_occupancy) {
-                ret = ERR_MAX_OCCUPANCY_EXCEEDED; 
-                goto out;
+        if (Lambda == -1.0) {
+            max_occupancy = 0;
+            memset(p, 0, self->max_occupancy * sizeof(double)); 
+            for (node = self->Q.head; node != NULL; node = node->next) {
+                smv = (set_map_value_t *) node->item;
+                occupancy = smv->key;
+                pixel_count = avl_count(&smv->value);
+                if (occupancy >= self->max_occupancy) {
+                    ret = ERR_MAX_OCCUPANCY_EXCEEDED; 
+                    goto out;
+                }
+                p[occupancy - 1] = pixel_count * sim_ubar(self, occupancy);
+                Lambda += p[occupancy - 1]; 
+                if (occupancy > max_occupancy) {
+                    max_occupancy = occupancy;
+                }
             }
-            p[occupancy - 1] = pixel_count * sim_ubar(self, occupancy);
-            Lambda += p[occupancy - 1]; 
-            if (occupancy > max_occupancy) {
-                max_occupancy = occupancy;
+            for (j = 1; j <= max_occupancy; j++) {
+                p[j - 1] /= Lambda;
             }
-        }
-        for (j = 1; j <= max_occupancy; j++) {
-            p[j - 1] /= Lambda;
         }
         /* Now determine the type of event this is */ 
         total_rate = Lambda * Lambda_const + non_repr_rate; 
@@ -1164,6 +1165,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
                 goto out;
             }
             events++;
+            Lambda = -1.0;
         } else {
             /* this is a reproduction event */
             occupancy = 1 + probability_list_select(p, max_occupancy, 
@@ -1207,6 +1209,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
                 if (ret != 0) {
                     goto out;
                 }
+                Lambda = -1.0;
             } 
         } 
     }
