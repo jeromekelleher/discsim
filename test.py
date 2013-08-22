@@ -40,8 +40,8 @@ class TestInitialiser(unittest.TestCase):
             _discsim.Simulator(sample, x, torus_diameter=10)
         def g(x):
             # TODO fix memory leak and renable.
-            _discsim.Simulator(sample, x, torus_diameter=10)
-            #_discsim.IdentitySolver(x, torus_diameter=10)
+            #_discsim.Simulator(sample, x, torus_diameter=10)
+            _discsim.IdentitySolver(x, torus_diameter=10)
         self.assertRaises(_discsim.InputError, f, []) 
         self.assertRaises(_discsim.InputError, f, [{}])
         self.assertRaises(_discsim.InputError, f, [[]])
@@ -336,12 +336,13 @@ class TestMultiLocusSimulation(unittest.TestCase):
         s = _discsim.Simulator(sample, events, torus_diameter=100, 
                 pixel_size=2, max_occupancy=1000, 
                 max_population_size=10**5,
-                num_parents=2, num_loci=10**5)
-        # The rapidly growing population will make memory leaks obvious 
+                num_parents=2, num_loci=10**3)
+        # The population will rapidly grow to something 
+        # fairly large and stable. Running this for a large n will
+        # make memory leaks obvious.
         for j in range(n):
             s.run(1000)
             pop = s.get_population()
-     
 
 
 class TestIdentity(unittest.TestCase):
@@ -349,7 +350,7 @@ class TestIdentity(unittest.TestCase):
     Tests the identity calculator.
     """
 
-    def DISABLE_test_solve(self):
+    def test_solve(self):
         events = [{"r":1, "u":0.5, "rate":1}]
         s = _discsim.IdentitySolver(events, 
                 torus_diameter=50,
