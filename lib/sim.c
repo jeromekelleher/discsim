@@ -323,7 +323,7 @@ static void
 sim_get_disc_pixels(sim_t *self, double *z)
 {
     double r = self->event_classes[0].r;
-    if (self->pixel_size < 1) {
+    if (self->pixel_size < r) {
         get_pixels_general(r, self->pixel_size, self->N, z, self->pixel_buffer);
     } else {
         get_pixels(r, self->pixel_size, self->N, z, self->pixel_buffer);
@@ -353,8 +353,8 @@ sim_alloc(sim_t *self)
     int ret = 0;
     unsigned int j, k, max;
     double *b = NULL;
-    double r = self->event_classes[0].r;
     double u = self->event_classes[0].u;
+    double r;
     self->N = self->torus_diameter / self->pixel_size;
     /* we assume that uint64_t <= size of a pointer */
     assert(sizeof(uint64_t) <= sizeof(uintptr_t));
@@ -366,6 +366,12 @@ sim_alloc(sim_t *self)
     if (self->rng == NULL) {
         ret = ERR_ALLOC_FAILED;
         goto out;
+    }
+    r = 0;
+    for (j = 0; j < self->num_event_classes; j++) {
+        if (self->event_classes[j].r > r) {
+            r = self->event_classes[j].r;
+        }
     }
     gsl_rng_set(self->rng, self->random_seed);
     self->P = xmalloc(gsl_pow_2(self->N) * sizeof(avl_tree_t));
@@ -382,7 +388,6 @@ sim_alloc(sim_t *self)
     avl_init_tree(&self->Q, avl_set_map_compare, NULL);
     for (j = 0; j < gsl_pow_2(self->N); j++) {
         avl_init_tree(&self->P[j], avl_set_compare, NULL);
-        
     }   
     /* Set up the set memory */
     max = self->max_disc_pixels * self->max_population_size;
@@ -1136,6 +1141,7 @@ sim_simulate(sim_t *self, uint64_t max_events)
             && events < max_events) {
         /* first calculate the rate of (potential) reproduction events */
         if (Lambda == -1.0) {
+            Lambda = 0.0;
             max_occupancy = 0;
             memset(p, 0, self->max_occupancy * sizeof(double)); 
             for (node = self->Q.head; node != NULL; node = node->next) {
