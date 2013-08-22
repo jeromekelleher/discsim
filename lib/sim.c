@@ -320,9 +320,8 @@ get_pixels(double r, double pixel_size, int N, double *z, unsigned int *p)
  * buffer.
  */
 static void 
-sim_get_disc_pixels(sim_t *self, double *z)
+sim_get_disc_pixels(sim_t *self, double *z, double r)
 {
-    double r = self->event_classes[0].r;
     if (self->pixel_size < r) {
         get_pixels_general(r, self->pixel_size, self->N, z, self->pixel_buffer);
     } else {
@@ -711,7 +710,8 @@ sim_add_individual(sim_t *self, individual_t *ind)
 {
     int ret = 0;
     unsigned int j, pixel;
-    sim_get_disc_pixels(self, ind->location); 
+    double r = self->event_classes[0].r;
+    sim_get_disc_pixels(self, ind->location, r); 
     for (j = 1; j <= self->pixel_buffer[0]; j++) {
         pixel = self->pixel_buffer[j];
         ret = sim_add_individual_to_pixel(self, pixel, ind);
@@ -753,7 +753,8 @@ sim_remove_individual(sim_t *self, individual_t *ind)
 {
     int ret = 0;
     unsigned int j, pixel;
-    sim_get_disc_pixels(self, ind->location); 
+    double r = self->event_classes[0].r;
+    sim_get_disc_pixels(self, ind->location, r); 
     for (j = 1; j <= self->pixel_buffer[0]; j++) {
         pixel = self->pixel_buffer[j];
         ret = sim_remove_individual_from_pixel(self, pixel, ind);
@@ -775,6 +776,7 @@ sim_initialise(sim_t *self)
 {
     int ret = 0;
     unsigned int j, k, l, pixel;
+    double r = self->event_classes[0].r;
     double *x;
     individual_t *ind;
     avl_node_t *node;
@@ -800,7 +802,7 @@ sim_initialise(sim_t *self)
                 goto out;
             }
         }
-        sim_get_disc_pixels(self, x); 
+        sim_get_disc_pixels(self, x, r); 
         for (k = 1; k <= self->pixel_buffer[0]; k++) {
             pixel = self->pixel_buffer[k];
             ret = sim_add_individual_to_pixel(self, pixel, ind);
@@ -833,17 +835,15 @@ sim_get_large_event_children(sim_t *self, double *z, double r, double u)
     int ret = 0;
     uint64_t id;
     uintptr_t int_ptr;
-    unsigned int pixel;
+    unsigned int pixel, j;
     individual_t *ind;
     avl_tree_t pop;
     avl_node_t *node, *pop_node;
-    avl_init_tree(&pop, avl_set_compare, NULL); 
     
-    /* This implementation is inefficient, and is only appropriate if this is 
-     * called very rarely.
-     */
-    self->num_children = 0;
-    for (pixel = 0; pixel < gsl_pow_2(self->N); pixel++) {
+    avl_init_tree(&pop, avl_set_compare, NULL); 
+    sim_get_disc_pixels(self, z, r); 
+    for (j = 1; j <= self->pixel_buffer[0]; j++) {
+        pixel = self->pixel_buffer[j];
         for (node = self->P[pixel].head; node != NULL; node = node->next) {
             id = *((uint64_t *) node->item);
             int_ptr = (uintptr_t) id;
@@ -864,6 +864,7 @@ sim_get_large_event_children(sim_t *self, double *z, double r, double u)
     /* Now go through the set of potential children and pick out those who 
      * were born.
      */
+    self->num_children = 0;
     for (pop_node = pop.head; pop_node != NULL; pop_node = pop_node->next) {
         id = *((uint64_t *) pop_node->item);
         int_ptr = (uintptr_t) id;
@@ -878,7 +879,6 @@ sim_get_large_event_children(sim_t *self, double *z, double r, double u)
         }
         sim_free_avl_set_node(self, pop_node);
     }
-
 out: 
     return ret;
 }
