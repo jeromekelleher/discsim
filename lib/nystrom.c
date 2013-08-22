@@ -257,10 +257,13 @@ static double
 nystrom_phi(nystrom_t *self, double x)
 {
     /* translate rates into torus rates */
-    double mu = self->mutation_rate * gsl_pow_2(self->torus_diameter);
+    double lambda = self->event_classes[0].rate;
+    double Lambda = lambda / gsl_pow_2(self->torus_diameter);
+    double mu = self->mutation_rate / Lambda; 
     double u = self->event_classes[0].u;
     double r = self->event_classes[0].r;
-    double phi = 2 * mu + 2 * u * M_PI * gsl_pow_2(r) - gsl_pow_2(u) * A2(x, r);
+    double phi = 2 * mu + 2 * u * M_PI * gsl_pow_2(r) 
+            - gsl_pow_2(u) * A2(x, r);
     return phi;
 }
 

@@ -98,12 +98,12 @@ def run_replicates(sim, num_replicates, worker_pool):
     return mean_identity
 
 
-def simple_identity_check(r=1, u=0.125, num_parents=1, num_replicates=10000, 
-        mutation_rate=1e-6):
+def simple_identity_check(r=1, u=0.125, rate=1, num_parents=1, 
+        num_replicates=10000, mutation_rate=1e-6):
     """
     Checks identity using very simple model parameters.
     """
-    events = [{"r":r, "u":u, "rate":1}]
+    events = [{"r":r, "u":u, "rate":rate}]
     torus_diameter = 100
     s = _discsim.IdentitySolver(events, 
             torus_diameter=torus_diameter,
@@ -136,17 +136,18 @@ def mixed_events_identity_check(num_replicates):
     sim = ErcsSingleLocusIdentitySimulator(torus_diameter)
     sim.setup(num_points, max_x, mutation_rate, accuracy_goal)
     workers = multiprocessing.Pool(4)
-    l = [small_events, large_events]
+    l = [large_events]
     sim.event_classes = l
-    ercs_F = run_replicates(sim, num_replicates, workers)
-    ercs_F.tofile("ercs.dat")
+    #ercs_F = run_replicates(sim, num_replicates, workers)
+    #ercs_F.tofile("ercs.dat")
     distances = np.linspace(0, max_x, num_points)
     events = [e.get_low_level_representation() for e in l] 
     sim = SingleLocusIdentitySimulator(distances, mutation_rate, accuracy_goal,
-            events, torus_diameter=torus_diameter, num_parents=1, 
+            events, torus_diameter=torus_diameter, num_parents=1,
+            pixel_size=20,
             max_occupancy=200)
     discsim_F = run_replicates(sim, num_replicates, workers)
-    discsim_F.tofile("discsim.dat")
+    discsim_F.tofile("discsim-large.dat")
     distances.tofile("x.dat")
     
 
@@ -165,7 +166,7 @@ def plot_mixed_events_identity():
             num_parents=1)
     s.solve()
     F_small = [s.interpolate(y) for y in x]
-    events = [{"r":10.0, "u":0.05, "rate":1}]
+    events = [{"r":10.0, "u":0.05, "rate":0.1}]
     s = _discsim.IdentitySolver(events, 
             torus_diameter=torus_diameter,
             num_quadrature_points=512,
@@ -181,8 +182,10 @@ def plot_mixed_events_identity():
     discsim_F = np.fromfile("discsim.dat")
     ercs_F = np.fromfile("ercs.dat")
     x = np.fromfile("x.dat")
+    discsim_F_large = np.fromfile("discsim-large.dat")
     pyplot.plot(x, discsim_F, "g--")
     pyplot.plot(x, ercs_F)
+    pyplot.plot(x, discsim_F_large)
     pyplot.yscale("log")
     pyplot.ylim(min(F_large), max(F_small))
     pyplot.gca().yaxis.set_minor_formatter(ticker.ScalarFormatter())
@@ -234,10 +237,10 @@ def single_locus_diffusion(u, r, rate):
 
 
 def main():
-    simple_identity_check()
+    #simple_identity_check(rate=0.5)
     #simple_identity_check(0.73, 0.133, 2, 10**6, 1e-7)
-    #mixed_events_identity_check(100000)
-    #plot_mixed_events_identity()
+    #mixed_events_identity_check(10000)
+    plot_mixed_events_identity()
     #single_locus_diffusion(u=0.000125, r=1, rate=1.0)
 
 if __name__ == "__main__":
