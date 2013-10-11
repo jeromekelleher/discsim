@@ -354,6 +354,15 @@ sim_alloc(sim_t *self)
     double *b = NULL;
     double u = self->event_classes[0].u;
     double r;
+    if (self->dimension < 1 || self->dimension > 2) {
+        ret = ERR_BAD_DIMENSION;
+        goto out;
+    }
+    if (self->dimension == 1 && self->pixel_size != 2.0) {
+        ret = ERR_BAD_PIXEL_SIZE;
+        goto out;
+    }
+
     self->N = self->torus_diameter / self->pixel_size;
     /* we assume that uint64_t <= size of a pointer */
     assert(sizeof(uint64_t) <= sizeof(uintptr_t));
@@ -1038,6 +1047,9 @@ sim_complete_event(sim_t *self, double *z, double r)
         } else {
             random_point_torus_disc(ind->location, z, r, 
                     self->torus_diameter, self->rng);
+            if (self->dimension == 1) {
+                ind->location[1] = 0.0;
+            }
             ret = sim_add_individual(self, ind);
             if (ret != 0) {
                 goto out;
@@ -1084,6 +1096,9 @@ sim_non_reproduction_event(sim_t *self)
     u = self->event_classes[j].u;
     z[0] = L * gsl_rng_uniform(self->rng);
     z[1] = L * gsl_rng_uniform(self->rng);
+    if (self->dimension == 1) {
+        z[1] = 0.0;
+    }
     ret = sim_get_large_event_children(self, z, r, u);
     if (ret != 0) {
         goto out;
@@ -1129,6 +1144,15 @@ sim_simulate(sim_t *self, uint64_t max_events)
     set_map_value_t *smv, smv_search;
     individual_t *ind;
 
+    if (self->dimension == 1) {
+        /* In 1D we put all points on the line y=0. This means that we intersect
+         * with exactly 2 pixels instead of 1, so we must divide the real constant 
+         * by 2 to compensate for this.
+         */
+        assert(self->pixel_size == 2.0);
+        Lambda_const = lambda * self->pixel_size / self->torus_diameter;
+        Lambda_const /= 2;
+    }
     non_repr_rate = 0.0;
     for (j = 1; j < self->num_event_classes; j++) {
         non_repr_rate += self->event_classes[j].rate;
@@ -1189,6 +1213,9 @@ sim_simulate(sim_t *self, uint64_t max_events)
             index_to_pixel_coord(pixel, self->N, v);
             z[0] = self->pixel_size * (v[0] + gsl_rng_uniform(self->rng));
             z[1] = self->pixel_size * (v[1] + gsl_rng_uniform(self->rng));
+            if (self->dimension == 1) {
+                z[1] = 0.0;
+            }
             assert(0.0 <= z[0] && self->torus_diameter > z[0]);
             assert(0.0 <= z[1] && self->torus_diameter > z[1]);
             S_size = 0;

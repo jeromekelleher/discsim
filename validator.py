@@ -1,6 +1,6 @@
 """
 Module used to validate the results of the simulations using various 
-means. These are not quiet tests, since we don't have exact values 
+means. These are not quite tests, since we don't have exact values 
 to check against, and everything is necessarily approximate.
 """
 from __future__ import print_function
@@ -121,9 +121,16 @@ def simple_identity_check(r=1, u=0.125, rate=1, num_parents=1,
             events, torus_diameter=torus_diameter,
             num_parents=num_parents)
     workers = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-    identity = run_replicates(sim, num_replicates, workers)
-    for x, f in zip(distances, identity):
-        print("{0:.1f}\t{1:.6f}\t{2:.6f}".format(x, f, s.interpolate(x)))
+    F_sim= run_replicates(sim, num_replicates, workers)
+    F_num = [s.interpolate(x) for x in distances]
+    for x, fs, fn in zip(distances, F_sim, F_num):
+        print("{0:.1f}\t{1:.6f}\t{2:.6f}".format(x, fs, fn)) 
+    pyplot.plot(distances, F_sim, label="Simulation")
+    pyplot.plot(distances, F_num, label="Numerical")
+    pyplot.legend()
+    pyplot.show()
+
+    
 
 def mixed_events_identity_check(num_replicates):
     torus_diameter = 100
@@ -179,7 +186,7 @@ def plot_mixed_events_identity():
     F_large = [s.interpolate(y) for y in x]
     pyplot.plot(x, F_small)
     pyplot.plot(x, F_large)
-    discsim_F = np.fromfile("discsim.dat")
+    discsim_F = np.fromfile("discsimi_new.dat")
     ercs_F = np.fromfile("ercs.dat")
     x = np.fromfile("x.dat")
     discsim_F_large = np.fromfile("discsim-large.dat")
@@ -187,7 +194,7 @@ def plot_mixed_events_identity():
     pyplot.plot(x, ercs_F)
     pyplot.plot(x, discsim_F_large)
     pyplot.yscale("log")
-    pyplot.ylim(min(F_large), max(F_small))
+    pyplot.ylim(min(discsim_F_large), max(F_small))
     pyplot.gca().yaxis.set_minor_formatter(ticker.ScalarFormatter())
     pyplot.show()
 
@@ -235,13 +242,39 @@ def single_locus_diffusion(u, r, rate):
     pyplot.plot(T, X, T, S)
     pyplot.show()
 
+def genetic_wave_1d(u):
+    """
+    Simulates the wave of genetic ancestors in 1D.
+    """
+    events = [{"r":1, "u":u, "rate":1}]
+    N = int(2 / u)
+    L = 100
+    sample = [L/2, L/2]
+    s = _discsim.Simulator(sample, events, torus_diameter=L, pixel_size=2,
+            max_occupancy=2 * N, max_population_size=10000, num_parents=2, 
+            dimension=1, num_loci=10000)
+    for j in range(5):
+        s.run(10000)
+        pop = s.get_population()
+        n = [0 for j in range(L)]
+        x = [j for j in range(L)]
+        for y, a in pop:
+            j = int(y)
+            n[j] += 1
+            n[j + 1] += 1
+        pyplot.plot(x, n)
+        
+    pyplot.axhline(0.797 * N)
+    pyplot.show()
 
 def main():
     #simple_identity_check(rate=0.5)
-    #simple_identity_check(0.73, 0.133, 2, 10**6, 1e-7)
+    #simple_identity_check(r=0.73, u=0.133, rate=0.5, num_parents=2, 
+    #        num_replicates=10**6, mutation_rate=1e-7)
     #mixed_events_identity_check(10000)
-    plot_mixed_events_identity()
+    #plot_mixed_events_identity()
     #single_locus_diffusion(u=0.000125, r=1, rate=1.0)
+    genetic_wave_1d(u=0.005)
 
 if __name__ == "__main__":
     main()

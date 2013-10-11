@@ -79,6 +79,9 @@ discsim_error_message(int err)
         case ERR_ALLOC_FAILED:
             ret = "Memory allocation failure";
             break;
+        case ERR_BAD_DIMENSION:
+            ret = "Dimension must be 1 or 2";
+            break;
         case ERR_BAD_PIXEL_SIZE:
             ret = "Bad pixel size";
             break;

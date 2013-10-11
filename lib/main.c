@@ -60,6 +60,7 @@ static void
 read_sample(sim_t *self, config_t *config)
 {
     unsigned int j;
+    double x, y;
     config_setting_t *s;
     config_setting_t *setting = config_lookup(config, "sample"); 
     if (setting == NULL) {
@@ -73,19 +74,29 @@ read_sample(sim_t *self, config_t *config)
         fatal_error("sample size must be > 0");
     }
     self->sample = xmalloc(2 * self->sample_size * sizeof(double));
+    y = 0.0;
     for (j = 0; j < self->sample_size; j++) {
         s = config_setting_get_elem(setting, j);
         if (s == NULL) {
             fatal_error("error reading sample[%d]", j);
         }
-        if (config_setting_is_array(s) == CONFIG_FALSE) {
-            fatal_error("sample[%d] not an array", j);
+        if (self->dimension == 1) {
+            if (config_setting_is_number(s) == CONFIG_FALSE) {
+                fatal_error("sample[%d] not a float", j);
+            }
+            x = config_setting_get_float_elem(setting, j);
+        } else {
+            if (config_setting_is_array(s) == CONFIG_FALSE) {
+                fatal_error("sample[%d] not an array", j);
+            }
+            if (config_setting_length(s) != 2) { 
+                fatal_error("sample[%d] not 2D", j);
+            }
+            x = config_setting_get_float_elem(s, 0);
+            y = config_setting_get_float_elem(s, 1);
         }
-        if (config_setting_length(s) != 2) { 
-            fatal_error("sample[%d] not 2D", j);
-        }
-        self->sample[2 * j] = config_setting_get_float_elem(s, 0);
-        self->sample[2 * j + 1] = config_setting_get_float_elem(s, 1);
+        self->sample[2 * j] = x; 
+        self->sample[2 * j + 1] = y;
     }
 }
 
@@ -180,6 +191,11 @@ read_sim_config(sim_t *self, const char *filename)
         fatal_error("num_parents is a required parameter");
     }
     self->num_parents = tmp;
+    if (config_lookup_int(config, "dimension", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("dimension is a required parameter");
+    }
+    self->dimension = tmp;
     if (config_lookup_int(config, "num_loci", &tmp) 
             == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");

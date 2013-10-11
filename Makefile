@@ -2,11 +2,12 @@
 
 SRC=_discsimmodule.c
 
+ext2: ${SRC}
+	python setup.py build_ext --inplace
+
 ext3: ${SRC}
 	python3 setup.py build_ext --inplace
 
-ext2: ${SRC}
-	python setup.py build_ext --inplace
 
 ctags:
 	ctags *.c *.py test/*.py

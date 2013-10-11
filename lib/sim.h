@@ -41,6 +41,7 @@ typedef struct {
 
 typedef struct {
     double *sample;
+    unsigned int dimension;
     unsigned int sample_size;
     unsigned int num_loci;
     unsigned int num_parents;

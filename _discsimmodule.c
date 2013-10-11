@@ -160,29 +160,46 @@ Simulator_parse_sample(Simulator *self, PyObject *py_sample)
     memset(self->sim->sample, 0, 2 * n * sizeof(double));
     for (j = 0; j < n; j++) {
         item = PyList_GetItem(py_sample, j);
-        size = 0;
-        if (!PyTuple_Check(item)) {
-            PyErr_SetString(DiscsimInputError, "Samples must be 2-tuples"); 
-            goto out;
-        } else {
-            size = PyTuple_Size(item);
-            if (size != 2) {
-                PyErr_SetString(DiscsimInputError, "Dimension != 2 not supported"); 
+        if (self->sim->dimension == 1) {
+            value = item;
+            if (!PyNumber_Check(value)) {
+                PyErr_SetString(DiscsimInputError, 
+                        "Locations must be numeric");
                 goto out;
             }
-            for (k = 0; k < 2; k++) {
-                value = PyTuple_GetItem(item, k);
-                if (!PyNumber_Check(value)) {
-                    PyErr_SetString(DiscsimInputError, 
-                            "Locations must be numeric");
+            v = PyFloat_AsDouble(value);
+            self->sim->sample[j * 2] = v;
+            self->sim->sample[j * 2 + 1] = 0.0;
+            if (v < 0.0 || v >= self->sim->torus_diameter) {
+                PyErr_SetString(DiscsimInputError, 
+                        "sample location: must have 0 <= v < L"); 
+                goto out;
+            }
+        } else {
+            size = 0;
+            if (!PyTuple_Check(item)) {
+                PyErr_SetString(DiscsimInputError, "Samples must be 2-tuples"); 
+                goto out;
+            } else {
+                size = PyTuple_Size(item);
+                if (size != 2) {
+                    PyErr_SetString(DiscsimInputError, "Dimension != 2 not supported"); 
                     goto out;
                 }
-                v = PyFloat_AsDouble(value);
-                self->sim->sample[j * 2 + k] = v;
-                if (v < 0.0 || v >= self->sim->torus_diameter) {
-                    PyErr_SetString(DiscsimInputError, 
-                            "sample location: must have 0 <= v < L"); 
-                    goto out;
+                for (k = 0; k < 2; k++) {
+                    value = PyTuple_GetItem(item, k);
+                    if (!PyNumber_Check(value)) {
+                        PyErr_SetString(DiscsimInputError, 
+                                "Locations must be numeric");
+                        goto out;
+                    }
+                    v = PyFloat_AsDouble(value);
+                    self->sim->sample[j * 2 + k] = v;
+                    if (v < 0.0 || v >= self->sim->torus_diameter) {
+                        PyErr_SetString(DiscsimInputError, 
+                                "sample location: must have 0 <= v < L"); 
+                        goto out;
+                    }
                 }
             }
         }
@@ -239,6 +256,14 @@ Simulator_check_input(Simulator *self)
     sim_t *sim = self->sim;
     event_class_t *e;
     if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (sim->dimension < 1 || sim->dimension > 2) {
+        handle_input_error("dimension must be 1 or 2");
+        goto out;
+    }
+    if (sim->dimension == 1 && sim->pixel_size != 2.0) {
+        handle_input_error("pixel size must be 2.0 in 1D");
         goto out;
     }
     if (sim->torus_diameter <= 0.0) {
@@ -309,7 +334,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"sample", "event_classes", "num_loci", 
             "num_parents", "max_population_size", "max_occupancy", 
-            "random_seed", "torus_diameter", "pixel_size",
+            "dimension", "random_seed", "torus_diameter", "pixel_size",
             "recombination_probability", "max_time", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
@@ -326,14 +351,15 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->random_seed = 1;
     sim->max_population_size = 1000;
     sim->max_occupancy = 10;
+    sim->dimension = 2;
     sim->max_time = DBL_MAX;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIkdddd", kwlist, 
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIkdddd", kwlist, 
             &PyList_Type, &sample, 
             &PyList_Type, &events, 
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
-            &sim->max_occupancy, &sim->random_seed, &sim->torus_diameter,
-            &sim->pixel_size, &sim->recombination_probability, 
-            &sim->max_time)) {
+            &sim->max_occupancy, &sim->dimension, &sim->random_seed, 
+            &sim->torus_diameter, &sim->pixel_size, 
+            &sim->recombination_probability, &sim->max_time)) {
         goto out;
     }
     if (Simulator_parse_sample(self, sample) != 0) {
@@ -386,6 +412,18 @@ Simulator_get_num_parents(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("I", self->sim->num_parents);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_dimension(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->dimension);
 out:
     return ret; 
 }
@@ -546,7 +584,12 @@ Simulator_individual_to_python(Simulator *self, individual_t *ind)
     avl_node_t *node;
     int_map_value_t *imv;
     PyObject *ancestry = NULL;
-    PyObject *loc = Py_BuildValue("(d,d)", x[0], x[1]);
+    PyObject *loc = NULL;
+    if (self->sim->dimension == 1) {
+        loc = Py_BuildValue("d", x[0]);
+    } else {
+        loc = Py_BuildValue("(d,d)", x[0], x[1]);
+    }
     if (loc == NULL) {
         goto out;
     }
@@ -739,6 +782,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of loci" },
     {"get_num_parents", (PyCFunction) Simulator_get_num_parents, METH_NOARGS, 
             "Returns the number of parents" },
+    {"get_dimension", (PyCFunction) Simulator_get_dimension, METH_NOARGS, 
+            "Returns the dimension of the simulation." },
     {"get_max_population_size", (PyCFunction) Simulator_get_max_population_size, 
             METH_NOARGS, 
             "Returns the maximum size of the ancestral population"},

@@ -39,8 +39,6 @@ class TestInitialiser(unittest.TestCase):
         def f(x):
             _discsim.Simulator(sample, x, torus_diameter=10)
         def g(x):
-            # TODO fix memory leak and renable.
-            #_discsim.Simulator(sample, x, torus_diameter=10)
             _discsim.IdentitySolver(x, torus_diameter=10)
         self.assertRaises(_discsim.InputError, f, []) 
         self.assertRaises(_discsim.InputError, f, [{}])
@@ -71,6 +69,12 @@ class TestInitialiser(unittest.TestCase):
         events = [{"r":0.5, "u":0.5, "rate":0.5}]
         def f(**kwargs):
             _discsim.Simulator(sample, events, **kwargs)
+        self.assertRaises(_discsim.InputError, f, dimension=-1)
+        self.assertRaises(_discsim.InputError, f, dimension=0)
+        self.assertRaises(_discsim.InputError, f, dimension=3)
+        self.assertRaises(_discsim.InputError, f, dimension=1, pixel_size=1)
+        self.assertRaises(_discsim.InputError, f, dimension=1, pixel_size=3)
+        self.assertRaises(_discsim.InputError, f, dimension=1, pixel_size=2.01)
         self.assertRaises(_discsim.InputError, f, torus_diameter=-1)
         self.assertRaises(_discsim.InputError, f, torus_diameter=0)
         self.assertRaises(_discsim.InputError, f, num_loci=0)
@@ -133,7 +137,10 @@ class TestInitialiser(unittest.TestCase):
         self.assertRaises(_discsim.LibraryError, s.run, 1000)
 
     def check_random_simulation(self):
-        pixel_size = random.uniform(1, 3)
+        dimension = random.randint(1, 2)
+        pixel_size = 2.0
+        if dimension == 2:
+            pixel_size = random.uniform(1, 3)
         torus_diameter = 64 * pixel_size
         rho = random.uniform(0, 1)
         random_seed = random.randint(0, 2**32)
@@ -147,7 +154,10 @@ class TestInitialiser(unittest.TestCase):
         for k in range(sample_size):
             x = random.uniform(0, torus_diameter)
             y = random.uniform(0, torus_diameter)
-            sample.append((x, y))
+            if dimension == 1:
+                sample.append(x)
+            else:
+                sample.append((x, y))
         events = [{"r":random.uniform(0.1, 10), 
             "u":random.uniform(0, 1), 
             "rate":random.uniform(0, 1000)}]
@@ -156,7 +166,8 @@ class TestInitialiser(unittest.TestCase):
                 recombination_probability=rho, num_parents=num_parents,
                 max_population_size=max_population_size, 
                 max_occupancy=max_occupancy, random_seed=random_seed, 
-                max_time=max_time)
+                max_time=max_time, dimension=dimension)
+        self.assertEqual(s.get_dimension(), dimension)
         self.assertEqual(s.get_num_parents(), num_parents)
         self.assertEqual(s.get_num_loci(), num_loci)
         self.assertEqual(s.get_max_population_size(), max_population_size)
@@ -323,6 +334,7 @@ class TestSimulation(unittest.TestCase):
                 self.assertTrue(sim.run()) 
                 pi, tau = sim.get_history()
                 self.check_single_locus_history(pi, tau) 
+
 
 class TestMultiLocusSimulation(unittest.TestCase):
     """
