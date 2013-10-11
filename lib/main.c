@@ -186,6 +186,11 @@ read_sim_config(sim_t *self, const char *filename)
                 config_error_text(config), config_error_line(config), 
                 filename);
     }
+    if (config_lookup_int(config, "simulate_pedigree", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("simulate_pedigree is a required parameter");
+    }
+    self->simulate_pedigree = tmp;
     if (config_lookup_int(config, "num_parents", &tmp) 
             == CONFIG_FALSE) {
         fatal_error("num_parents is a required parameter");

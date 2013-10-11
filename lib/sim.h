@@ -52,6 +52,11 @@ typedef struct {
     double pixel_size;
     double recombination_probability;
     double max_time;
+    /* if 1 we simulate all pedigree ancestors, so that each event has exactly 
+     * two parents. In this case we do not track the ancestry of the sample;
+     * only the locations of the ancestors is relevent.
+     */
+    int simulate_pedigree; 
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;

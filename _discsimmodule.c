@@ -266,6 +266,14 @@ Simulator_check_input(Simulator *self)
         handle_input_error("pixel size must be 2.0 in 1D");
         goto out;
     }
+    if (sim->simulate_pedigree < 0 || sim->simulate_pedigree > 1) {
+        handle_input_error("simulate_pedigree must be 0 or 1");
+        goto out;
+    }
+    if (sim->simulate_pedigree == 1 && sim->num_loci != 1) {
+        handle_input_error("m must be 1 for pedigree simulation");
+        goto out;
+    }
     if (sim->torus_diameter <= 0.0) {
         handle_input_error("must have torus_edge > 0");
         goto out;
@@ -330,8 +338,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"sample", "event_classes", "num_loci", 
             "num_parents", "max_population_size", "max_occupancy", 
-            "dimension", "random_seed", "torus_diameter", "pixel_size",
-            "recombination_probability", NULL}; 
+            "dimension", "simulate_pedigree", "random_seed", "torus_diameter",
+            "pixel_size", "recombination_probability", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
     self->sim = sim; 
@@ -348,13 +356,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->max_population_size = 1000;
     sim->max_occupancy = 10;
     sim->dimension = 2;
+    sim->simulate_pedigree = 0;
     sim->max_time = DBL_MAX;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIkddd", kwlist, 
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIIkddd", kwlist, 
             &PyList_Type, &sample, 
             &PyList_Type, &events, 
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
-            &sim->max_occupancy, &sim->dimension, &sim->random_seed, 
-            &sim->torus_diameter, &sim->pixel_size, 
+            &sim->max_occupancy, &sim->dimension, &sim->simulate_pedigree,
+            &sim->random_seed, &sim->torus_diameter, &sim->pixel_size, 
             &sim->recombination_probability)) {
         goto out;
     }
@@ -420,6 +429,18 @@ Simulator_get_dimension(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("I", self->sim->dimension);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_simulate_pedigree(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->simulate_pedigree);
 out:
     return ret; 
 }
@@ -767,6 +788,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of parents" },
     {"get_dimension", (PyCFunction) Simulator_get_dimension, METH_NOARGS, 
             "Returns the dimension of the simulation." },
+    {"get_simulate_pedigree", (PyCFunction) Simulator_get_simulate_pedigree, METH_NOARGS, 
+            "Returns 1 if we are simulating the pedigree; 0 otherwise." },
     {"get_max_population_size", (PyCFunction) Simulator_get_max_population_size, 
             METH_NOARGS, 
             "Returns the maximum size of the ancestral population"},

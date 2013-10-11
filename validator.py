@@ -269,14 +269,44 @@ def genetic_wave_1d(u):
     pyplot.axhline(0.797 * N)
     pyplot.show()
 
+def pedigree_wave_1d(u):
+    """
+    Simulates the wave of pedigree ancestors in 1D.
+    """
+    events = [{"r":1, "u":u, "rate":1}]
+    N = int(2 / u)
+    L = 100
+    sample = [L/2, L/2]
+    s = _discsim.Simulator(sample, events, torus_diameter=L, pixel_size=2,
+            max_occupancy=2 * N, max_population_size=10000, num_parents=2, 
+            dimension=1, num_loci=1, simulate_pedigree=1)
+    for j in range(5):
+        t = j * 500 * L
+        f = s.run(t)
+        pop = s.get_population()
+        n = [0 for j in range(L)]
+        x = [j for j in range(L)]
+        print(f, t, s.get_time(), len(pop))
+        for y, a in pop:
+            j = int(y)
+            n[j] += 1
+            n[j + 1] += 1
+        pyplot.plot(x, n)
+        
+    pyplot.axhline(0.797 * N)
+    pyplot.show()
+
+
+
 def main():
     #simple_identity_check(rate=0.5)
-    simple_identity_check(r=0.73, u=0.133, rate=0.5, num_parents=2, 
-            num_replicates=10**6, mutation_rate=1e-7)
+    #simple_identity_check(r=0.73, u=0.133, rate=0.5, num_parents=2, 
+    #        num_replicates=10**6, mutation_rate=1e-7)
     #mixed_events_identity_check(10000)
     #plot_mixed_events_identity()
     #single_locus_diffusion(u=0.000125, r=1, rate=1.0)
     #genetic_wave_1d(u=0.005)
+    pedigree_wave_1d(u=0.005)
 
 if __name__ == "__main__":
     main()

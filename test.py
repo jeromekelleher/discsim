@@ -69,6 +69,9 @@ class TestInitialiser(unittest.TestCase):
         events = [{"r":0.5, "u":0.5, "rate":0.5}]
         def f(**kwargs):
             _discsim.Simulator(sample, events, **kwargs)
+        self.assertRaises(_discsim.InputError, f, simulate_pedigree=-1)
+        self.assertRaises(_discsim.InputError, f, simulate_pedigree=2)
+        self.assertRaises(_discsim.InputError, f, simulate_pedigree=1, num_loci=2)
         self.assertRaises(_discsim.InputError, f, dimension=-1)
         self.assertRaises(_discsim.InputError, f, dimension=0)
         self.assertRaises(_discsim.InputError, f, dimension=3)
@@ -137,6 +140,7 @@ class TestInitialiser(unittest.TestCase):
         self.assertRaises(_discsim.LibraryError, s.run, t)
 
     def check_random_simulation(self):
+        simulate_pedigree = random.randint(0, 1)
         dimension = random.randint(1, 2)
         pixel_size = 2.0
         if dimension == 2:
@@ -146,6 +150,8 @@ class TestInitialiser(unittest.TestCase):
         random_seed = random.randint(0, 2**32)
         num_parents = random.randint(1, 5)
         num_loci = random.randint(1, 100)
+        if simulate_pedigree:
+            num_loci = 1
         sample_size = random.randint(2, 50)
         max_occupancy = random.randint(sample_size, 100)
         max_population_size = random.randint(2 * sample_size, 100)
@@ -165,7 +171,8 @@ class TestInitialiser(unittest.TestCase):
                 recombination_probability=rho, num_parents=num_parents,
                 max_population_size=max_population_size, 
                 max_occupancy=max_occupancy, random_seed=random_seed, 
-                dimension=dimension)
+                dimension=dimension, simulate_pedigree=simulate_pedigree)
+        self.assertEqual(s.get_simulate_pedigree(), simulate_pedigree)
         self.assertEqual(s.get_dimension(), dimension)
         self.assertEqual(s.get_num_parents(), num_parents)
         self.assertEqual(s.get_num_loci(), num_loci)

@@ -985,33 +985,36 @@ sim_generate_parents(sim_t *self)
             goto out;
         }
     }
-    for (j = 0; j < self->num_children; j++) {
-        /* Assign the parent for the first locus */
-        parent = gsl_rng_uniform_int(self->rng, self->num_parents);
-        node = C[j]->ancestry.head;
-        assert(node != NULL);
-        locus_mapping = (int_map_value_t *) node->item;
-        ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
-                locus_mapping->value);
-        if (ret != 0) {
-            goto out;
-        }
-        previous_locus = locus_mapping->key;
-        while (node->next != NULL) {
-            node = node->next; 
+    /* if we're simulating the pedigree, skip updating the ancestry */
+    if (self->simulate_pedigree == 0) {
+        for (j = 0; j < self->num_children; j++) {
+            /* Assign the parent for the first locus */
+            parent = gsl_rng_uniform_int(self->rng, self->num_parents);
+            node = C[j]->ancestry.head;
+            assert(node != NULL);
             locus_mapping = (int_map_value_t *) node->item;
-            parent = sim_select_parent(self, parent, locus_mapping->key
-                    - previous_locus);
             ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
                     locus_mapping->value);
             if (ret != 0) {
                 goto out;
             }
             previous_locus = locus_mapping->key;
-        }
-        /* Now free the ancestry nodes */
-        for (node = C[j]->ancestry.head; node != NULL; node = node->next) {
-            sim_free_avl_int_map_node(self, node);
+            while (node->next != NULL) {
+                node = node->next; 
+                locus_mapping = (int_map_value_t *) node->item;
+                parent = sim_select_parent(self, parent, locus_mapping->key
+                        - previous_locus);
+                ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
+                        locus_mapping->value);
+                if (ret != 0) {
+                    goto out;
+                }
+                previous_locus = locus_mapping->key;
+            }
+            /* Now free the ancestry nodes */
+            for (node = C[j]->ancestry.head; node != NULL; node = node->next) {
+                sim_free_avl_int_map_node(self, node);
+            }
         }
     }
 out:
@@ -1042,7 +1045,8 @@ sim_complete_event(sim_t *self, double *z, double r)
     /* add in the parents, if they have any ancestral material */
     for (j = 0; j < self->num_parents; j++) {
         ind = self->parent_buffer[j];
-        if (avl_count(&ind->ancestry) == 0) {
+        /* We always add in both parents when simulating the pedigree */
+        if (avl_count(&ind->ancestry) == 0 && self->simulate_pedigree == 0) {
             sim_free_individual(self, ind);
         } else {
             random_point_torus_disc(ind->location, z, r, 
