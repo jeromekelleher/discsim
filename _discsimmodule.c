@@ -291,10 +291,6 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have 0 <= recombination_probability <= 1");
         goto out;
     }
-    if (sim->max_time <= 0) {
-        handle_input_error("must have max_time > 0");
-        goto out;
-    }
     if (sim->pixel_size <= 0 || sim->pixel_size > sim->torus_diameter / 4) {
         handle_input_error("must have 0 < pixel_size <= L/4 ");
         goto out;
@@ -335,7 +331,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"sample", "event_classes", "num_loci", 
             "num_parents", "max_population_size", "max_occupancy", 
             "dimension", "random_seed", "torus_diameter", "pixel_size",
-            "recombination_probability", "max_time", NULL}; 
+            "recombination_probability", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
     self->sim = sim; 
@@ -353,13 +349,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->max_occupancy = 10;
     sim->dimension = 2;
     sim->max_time = DBL_MAX;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIkdddd", kwlist, 
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIkddd", kwlist, 
             &PyList_Type, &sample, 
             &PyList_Type, &events, 
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
             &sim->max_occupancy, &sim->dimension, &sim->random_seed, 
             &sim->torus_diameter, &sim->pixel_size, 
-            &sim->recombination_probability, &sim->max_time)) {
+            &sim->recombination_probability)) {
         goto out;
     }
     if (Simulator_parse_sample(self, sample) != 0) {
@@ -489,18 +485,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_max_time(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sim->max_time);
-out:
-    return ret; 
-}
-
-static PyObject *
 Simulator_get_time(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -587,6 +571,7 @@ Simulator_individual_to_python(Simulator *self, individual_t *ind)
     PyObject *loc = NULL;
     if (self->sim->dimension == 1) {
         loc = Py_BuildValue("d", x[0]);
+
     } else {
         loc = Py_BuildValue("(d,d)", x[0], x[1]);
     }
@@ -747,31 +732,29 @@ Simulator_run(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int status, not_done;
-    uint64_t simulated_events = 0;
-    uint64_t rem;
     uint64_t chunk = 8192; 
-    unsigned long long num_events = ULLONG_MAX;
+    double max_time = DBL_MAX;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "|K", &num_events)) {
+    if (!PyArg_ParseTuple(args, "|d", &max_time)) {
         goto out;
     }
     not_done = 1; 
+    self->sim->max_time = max_time;
     while (not_done) {
-        rem = num_events - simulated_events;
-        status = sim_simulate(self->sim, GSL_MIN(chunk, rem)); 
+        status = sim_simulate(self->sim, chunk);
         if (status < 0) {
             handle_library_error(status);
             goto out;
         }
-        simulated_events += chunk;
-        not_done = status != 0 && simulated_events < num_events; 
+        not_done = status != 0; 
         if (PyErr_CheckSignals() < 0) {
             goto out;
         }
     }
-    ret = status == 0 ? Py_True : Py_False;
+    /* return True if complete coalescence has occured */
+    ret = self->sim->time < max_time ? Py_True : Py_False;
     Py_INCREF(ret);
 out:
     return ret;
@@ -796,8 +779,6 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the torus diameter" },
     {"get_pixel_size", (PyCFunction) Simulator_get_pixel_size, METH_NOARGS, 
             "Returns the size of a pixel" },
-    {"get_max_time", (PyCFunction) Simulator_get_max_time, METH_NOARGS, 
-            "Returns the size of a pixel" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS, 
             "Returns the current simulation time" },
     {"get_num_reproduction_events", 
@@ -813,7 +794,7 @@ static PyMethodDef Simulator_methods[] = {
     {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS, 
             "Returns the history of the sample as a tuple (pi, tau)" },
     {"run", (PyCFunction) Simulator_run, METH_VARARGS, 
-            "Simulates at most the specified number of events. Returns True\
+            "Simulates until at most the specified time. Returns True\
             if the required stopping conditions have been met and False \
             otherwise." },
     {NULL}  /* Sentinel */

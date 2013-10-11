@@ -66,10 +66,9 @@ class SingleLocusIdentitySimulator(object):
         """
         Runs the simulation and returns the simulated history.
         """
-        self.__params["max_time"] = self.__max_time
         self.__params["random_seed"] = seed 
         s = _discsim.Simulator(self.__sample, self.__events, **self.__params)
-        s.run()
+        s.run(self.__max_time)
         return s.get_history()
 
     def get_identity(self, seed):
@@ -231,7 +230,8 @@ def single_locus_diffusion(u, r, rate):
     D = []
     S = []
     for j in range(100):
-        s.run(1000)
+        t = j * 100 * L**2
+        s.run(t)
         pop = s.get_population()
         msd = get_mean_squared_displacement(z, pop) 
         t = s.get_time() / L**2
@@ -254,10 +254,12 @@ def genetic_wave_1d(u):
             max_occupancy=2 * N, max_population_size=10000, num_parents=2, 
             dimension=1, num_loci=10000)
     for j in range(5):
-        s.run(10000)
+        t = j * 1000 * L
+        f = s.run(t)
         pop = s.get_population()
         n = [0 for j in range(L)]
         x = [j for j in range(L)]
+        print(f, t, s.get_time(), len(pop))
         for y, a in pop:
             j = int(y)
             n[j] += 1
@@ -269,12 +271,12 @@ def genetic_wave_1d(u):
 
 def main():
     #simple_identity_check(rate=0.5)
-    #simple_identity_check(r=0.73, u=0.133, rate=0.5, num_parents=2, 
-    #        num_replicates=10**6, mutation_rate=1e-7)
+    simple_identity_check(r=0.73, u=0.133, rate=0.5, num_parents=2, 
+            num_replicates=10**6, mutation_rate=1e-7)
     #mixed_events_identity_check(10000)
     #plot_mixed_events_identity()
     #single_locus_diffusion(u=0.000125, r=1, rate=1.0)
-    genetic_wave_1d(u=0.005)
+    #genetic_wave_1d(u=0.005)
 
 if __name__ == "__main__":
     main()
