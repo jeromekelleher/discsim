@@ -592,42 +592,47 @@ Simulator_individual_to_python(Simulator *self, individual_t *ind)
     PyObject *loc = NULL;
     if (self->sim->dimension == 1) {
         loc = Py_BuildValue("d", x[0]);
-
     } else {
         loc = Py_BuildValue("(d,d)", x[0], x[1]);
     }
     if (loc == NULL) {
         goto out;
     }
-    ancestry = PyDict_New();
-    if (ancestry == NULL) {
-        goto out;
-    }
-    for (node = ind->ancestry.head; node != NULL; node = node->next) {
-        imv = (int_map_value_t *) node->item;
-        key = Py_BuildValue("I", imv->key);
-        if (key == NULL) {
-            goto out; 
+    if (self->sim->simulate_pedigree == 1) {
+        ret = loc; 
+    } else {
+        ancestry = PyDict_New();
+        if (ancestry == NULL) {
+            goto out;
         }
-        value = Py_BuildValue("I", imv->value);
-        if (value == NULL) {
+        for (node = ind->ancestry.head; node != NULL; node = node->next) {
+            imv = (int_map_value_t *) node->item;
+            key = Py_BuildValue("I", imv->key);
+            if (key == NULL) {
+                goto out; 
+            }
+            value = Py_BuildValue("I", imv->value);
+            if (value == NULL) {
+                Py_DECREF(key);
+                goto out;
+            }
+            status = PyDict_SetItem(ancestry, key, value);
             Py_DECREF(key);
+            Py_DECREF(value);
+            if (status != 0) {
+                goto out;
+            }
+        }
+        ret = PyTuple_Pack(2, loc, ancestry);
+        if (ret == NULL) {
             goto out;
         }
-        status = PyDict_SetItem(ancestry, key, value);
-        Py_DECREF(key);
-        Py_DECREF(value);
-        if (status != 0) {
-            goto out;
-        }
-    }
-    ret = PyTuple_Pack(2, loc, ancestry);
-    if (ret == NULL) {
-        goto out;
     }
 out:
-    Py_XDECREF(loc);
-    Py_XDECREF(ancestry);
+    if (self->sim->simulate_pedigree == 0) {
+        Py_XDECREF(loc);
+        Py_XDECREF(ancestry);
+    }
     return ret; 
 }
         
@@ -702,6 +707,12 @@ Simulator_get_history(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
+    if (self->sim->simulate_pedigree == 1) {
+        PyErr_SetString(PyExc_NotImplementedError, 
+                "Cannot get history for pedigree simulation"); 
+        goto out; 
+    }
+
     pi = PyList_New(sim->num_loci);
     if (pi == NULL) {
         goto out;

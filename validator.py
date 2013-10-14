@@ -287,7 +287,7 @@ def pedigree_wave_1d(u):
         n = [0 for j in range(L)]
         x = [j for j in range(L)]
         print(f, t, s.get_time(), len(pop))
-        for y, a in pop:
+        for y in pop:
             j = int(y)
             n[j] += 1
             n[j + 1] += 1

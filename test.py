@@ -27,7 +27,12 @@ import random
 import optparse
 
 import _discsim
+import discsim
+import ercs
 
+#
+# Low level module tests
+#
 
 class TestInitialiser(unittest.TestCase):
     """
@@ -184,29 +189,33 @@ class TestInitialiser(unittest.TestCase):
         self.assertEqual(s.get_recombination_probability(), rho)
         self.assertEqual(s.get_event_classes(), events)
         pop = s.get_population()
-        locations = [x for x, a in pop]
-        ancestry = [a for x, a in pop]
+        if simulate_pedigree == 1:
+            locations = pop
+        else:
+            locations = [x for x, a in pop]
+            ancestry = [a for x, a in pop]
         self.assertEqual(len(pop), sample_size)
         for x in sample:
             self.assertTrue(x in locations)
-        for a in ancestry:
-            self.assertEqual(len(a), num_loci)
-            d = {}
-            for v in a.values():
-                if v not in d:
-                    d[v] = 0
-                d[v] += 1
-            self.assertEqual(len(d), 1)
-        pi, tau = s.get_history() 
-        self.assertEqual(num_loci, len(pi))
-        self.assertEqual(num_loci, len(tau))
-        for l in range(num_loci):
-            self.assertEqual(2 * sample_size, len(pi[l]))
-            self.assertEqual(2 * sample_size, len(tau[l]))
-            for a, t in zip(pi[l], tau[l]):
-                self.assertEqual(a, 0)
-                self.assertEqual(a, 0.0)
-            
+        if simulate_pedigree == 0:
+            for a in ancestry:
+                self.assertEqual(len(a), num_loci)
+                d = {}
+                for v in a.values():
+                    if v not in d:
+                        d[v] = 0
+                    d[v] += 1
+                self.assertEqual(len(d), 1)
+            pi, tau = s.get_history() 
+            self.assertEqual(num_loci, len(pi))
+            self.assertEqual(num_loci, len(tau))
+            for l in range(num_loci):
+                self.assertEqual(2 * sample_size, len(pi[l]))
+                self.assertEqual(2 * sample_size, len(tau[l]))
+                for a, t in zip(pi[l], tau[l]):
+                    self.assertEqual(a, 0)
+                    self.assertEqual(a, 0.0)
+                
         self.assertEqual(s.get_time(), 0.0)
         self.assertEqual(s.get_num_reproduction_events(), 0)
 
@@ -327,18 +336,64 @@ class TestMultiLocusSimulation(unittest.TestCase):
 
     def test_memory(self):
         n = 100
-        sample = [(0,0), (0,0)]
+        samples = [(1, [0, 0]), (2, [(0,0), (0,0)])]
         events = [{"r":1, "u":0.01, "rate":1}]
-        s = _discsim.Simulator(sample, events, torus_diameter=100, 
-                pixel_size=2, max_occupancy=1000, 
-                max_population_size=10**5,
-                num_parents=2, num_loci=10**3)
-        # The population will rapidly grow to something 
-        # fairly large and stable. Running this for a large n will
-        # make memory leaks obvious.
-        for j in range(n):
-            s.run(1000)
-            pop = s.get_population()
+        L = 100
+        for dim, sample in samples:
+            s = _discsim.Simulator(sample, events, torus_diameter=L, 
+                    pixel_size=2, max_occupancy=1000, 
+                    max_population_size=10**5,
+                    num_parents=2, num_loci=10**3, dimension=dim)
+            # The population will rapidly grow to something 
+            # fairly large and stable. Running this for a large n will
+            # make memory leaks obvious.
+            for j in range(n):
+                s.run(j * 10 * L**dim)
+                pop = s.get_population()
+                for t in pop:
+                    self.assertEqual(len(t), 2)
+                    self.assertTrue(isinstance(t, tuple))
+                    x = t[0]
+                    if dim == 1:
+                        self.assertTrue(isinstance(x, float))
+                    else:
+                        self.assertTrue(isinstance(x, tuple))
+                        self.assertEqual(len(x), 2)
+                        self.assertTrue(isinstance(x[0], float))
+                        self.assertTrue(isinstance(x[1], float))
+                    a = t[1]
+                    self.assertTrue(isinstance(a, dict))
+                    self.assertTrue(len(a) >  0)
+
+                 
+class TestPedigreeSimulation(unittest.TestCase):
+    """
+    Test the pedigree simulation for various errors.
+    """
+    def test_memory(self):
+        n = 50
+        L = 100
+        samples = [(1, [0, 0]), (2, [(0,0), (0,0)])]
+        events = [{"r":1, "u":0.01, "rate":1}]
+        for dim, sample in samples:
+            s = _discsim.Simulator(sample, events, torus_diameter=L, 
+                    pixel_size=2, max_occupancy=1000, 
+                    max_population_size=10**5,
+                    num_parents=2, num_loci=1, dimension=dim, 
+                    simulate_pedigree=1)
+            # The population rapidly grows.
+            for j in range(n):
+                s.run(j * 10 * L**dim)
+                pop = s.get_population()
+                for x in pop:
+                    if dim == 1:
+                        self.assertTrue(isinstance(x, float))
+                    else:
+                        self.assertTrue(isinstance(x, tuple))
+                        self.assertEqual(len(x), 2)
+                        self.assertTrue(isinstance(x[0], float))
+                        self.assertTrue(isinstance(x[1], float))
+                self.assertRaises(NotImplementedError, s.get_history)
 
 
 class TestIdentity(unittest.TestCase):
@@ -361,6 +416,54 @@ class TestIdentity(unittest.TestCase):
         s.solve()
         fx_a = [s.interpolate(x) for x in range(10)]
         self.assertNotEqual(fx_b, fx_a)
+
+
+#
+# high level module tests
+#
+
+class TestHighLevel(unittest.TestCase):
+    """
+    Superclass of high level test cases.
+    """
+
+    def verify_attributes(self, sim):
+        """
+        Verifies that the attibutes held by the simulator are equal to the 
+        values from the low-level object.
+        """
+        llsim = sim.get_ll_object()
+        self.assertEqual(llsim.get_torus_diameter(), sim.torus_diameter)
+        self.assertEqual(llsim.get_num_loci(), sim.num_loci)
+        self.assertEqual(llsim.get_num_parents(), sim.num_parents)
+        self.assertEqual(llsim.get_max_population_size(), sim.max_population_size)
+        self.assertEqual(llsim.get_max_occupancy(), sim.max_occupancy)
+        self.assertEqual(llsim.get_dimension(), sim.dimension)
+        self.assertEqual(llsim.get_simulate_pedigree(), sim.simulate_pedigree)
+        self.assertEqual(llsim.get_random_seed(), sim.random_seed)
+        self.assertEqual(llsim.get_pixel_size(), sim.pixel_size)
+        self.assertEqual(llsim.get_recombination_probability(), sim.recombination_probability)
+        ecs = sim.event_classes
+        llecs = llsim.get_event_classes()
+        self.assertEqual(len(ecs), len(llecs))
+        for ec, llec in zip(ecs, llecs):
+            d = ec.get_low_level_representation()
+            del d[ec._TYPE]
+            self.assertEqual(d, llec)
+
+class TestInterface(TestHighLevel):
+    """
+    Tests to verify the high level interface.
+    """
+    def test_defaults(self):
+        L = 100
+        sim = discsim.Simulator(L)
+        sim.sample = [None, (0,1), (2,0)]
+        sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
+        sim.run(0)
+        self.verify_attributes(sim)
+        pop = sim.get_population()
+        self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] "
