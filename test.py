@@ -288,9 +288,9 @@ class TestSimulation(unittest.TestCase):
             coalesced = self._simulator.run(t)
             sim_t = self._simulator.get_time()
             if coalesced:
-                self.assertLessEqual(sim_t, t)
+                self.assertTrue(sim_t <= t)
             else:
-                self.assertLessEqual(t, sim_t)
+                self.assertTrue(t <= sim_t)
                 
            
 
