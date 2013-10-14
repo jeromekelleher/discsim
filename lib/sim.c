@@ -364,8 +364,8 @@ sim_alloc(sim_t *self)
     }
 
     self->N = self->torus_diameter / self->pixel_size;
-    /* we assume that uint64_t <= size of a pointer */
-    assert(sizeof(uint64_t) <= sizeof(uintptr_t));
+    /* we assume that uint64_t >= size of a pointer */
+    assert(sizeof(uint64_t) >= sizeof(uintptr_t));
     if (fmod(self->torus_diameter, self->pixel_size) != 0.0) {
         ret = ERR_BAD_PIXEL_SIZE;
         goto out;
@@ -741,9 +741,10 @@ sim_remove_individual_from_pixel(sim_t *self, unsigned int pixel,
     int ret = 0;
     avl_node_t *node;
     uintptr_t id = (uintptr_t) ind;
+    uint64_t search = (uint64_t) id;
     unsigned int h;
     /* remove the id from this pixel */
-    node = avl_search(&self->P[pixel], &id);
+    node = avl_search(&self->P[pixel], &search);
     assert(node != NULL);
     avl_unlink_node(&self->P[pixel], node);
     sim_free_avl_set_node(self, node);
@@ -1346,9 +1347,10 @@ sim_print_state(sim_t *self, int detail)
     if (ret != 0) {
         goto out;
     }
-    printf("reproduction events:    \t%lu\n", self->num_reproduction_events);
+    printf("reproduction events:    \t%lu\n", 
+            (unsigned long) self->num_reproduction_events);
     printf("non reproduction events:\t%lu\n", 
-            self->num_non_reproduction_events);
+            (unsigned long) self->num_non_reproduction_events);
     printf("chi = \n");
     for (chi_node = chi.head; chi_node != NULL; chi_node = chi_node->next) {
         id = *((uint64_t *) chi_node->item);
@@ -1404,7 +1406,7 @@ sim_print_state(sim_t *self, int detail)
             for (k = 0; k < avl_count(&set_map_value->value); k++) {
                 node = avl_at(&set_map_value->value, k);
                 pixel = *((uint64_t *) node->item);
-                printf(" %ld, ", pixel);
+                printf(" %ld, ", (unsigned long) pixel);
                 /* verify that the occupancy of this pixel is h */
                 assert(avl_count(&self->P[pixel]) == h);
             }
