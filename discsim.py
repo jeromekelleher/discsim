@@ -24,7 +24,6 @@ model.
 from __future__ import division
 from __future__ import print_function 
 
-
 import sys
 import math
 import random
@@ -41,8 +40,9 @@ class Simulator(object):
     in one and two dimensions. Both genetic and pedigree ancestors 
     can be simulated.
     """
-    def __init__(self, torus_diameter):
+    def __init__(self, torus_diameter, simulate_pedigree=False):
         self.torus_diameter = torus_diameter
+        self.simulate_pedigree = simulate_pedigree 
         self.sample = None 
         self.event_classes = None 
         self.num_parents = None
@@ -52,7 +52,6 @@ class Simulator(object):
         self.max_population_size = None
         self.pixel_size = None
         self.dimension = None
-        self.simulate_pedigree = None
         self.random_seed = None
         self.__simulator = None
 
@@ -62,8 +61,6 @@ class Simulator(object):
         Sets up the default values for instances that have not been 
         specified.
         """
-        if self.simulate_pedigree is None:
-            self.simulate_pedigree = False
         if self.recombination_probability is None:
             self.recombination_probability = 0.5
         if self.num_loci is None:
@@ -142,8 +139,9 @@ class Simulator(object):
                     pixel_size=self.pixel_size, random_seed=self.random_seed,
                     recombination_probability=self.recombination_probability, 
                     num_parents=self.num_parents, 
+                    simulate_pedigree=int(self.simulate_pedigree),
                     max_population_size=self.max_population_size, 
-                    max_occupancy=self.max_occupancy)
+                    max_occupancy=self.max_occupancy, dimension=self.dimension)
 
     def get_ll_object(self):
         """

@@ -27,6 +27,9 @@
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
 
+#define CHECK_PIXELS
+#include <gsl/gsl_sort.h>
+
 static int 
 avl_set_compare(const void *pa, const void *pb)
 {
@@ -232,102 +235,13 @@ get_pixels_general(double r, double pixel_size, int N, double *z, unsigned int *
     } 
 }
 
-static void
-get_pixels(double r, double pixel_size, int N, double *z, unsigned int *p)
-{
-    double r2 = r * r;
-    double a[2], b[2], c[2], d[2], x[2];
-    double torus_diameter = pixel_size * N;
-    int v[2];
-    assert(pixel_size >= 1.0);
-    v[0] = (unsigned int) floor(z[0] / pixel_size); 
-    v[1] = (unsigned int) floor(z[1] / pixel_size); 
-    p[0] = 1;
-    p[p[0]] = pixel_coord_to_index(v[0], v[1], N);
-    a[0] = pixel_size * v[0];
-    a[1] = pixel_size * v[1];
-    b[0] = a[0] + r;
-    b[1] = a[1] + r;
-    d[0] = a[0] + pixel_size;
-    d[1] = a[1] + pixel_size;
-    c[0] = d[0] - r;
-    c[1] = d[1] - r;
-    if (z[0] < b[0]) {
-        p[0]++;
-        p[p[0]] = pixel_coord_to_index((v[0] - 1 + N) % N, v[1], N);
-    } 
-    if (z[0] > c[0]) {
-        p[0]++;
-        p[p[0]] = pixel_coord_to_index((v[0] + 1) % N, v[1], N);
-    }
-    if (z[1] < b[1]) {
-        p[0]++;
-        p[p[0]] = pixel_coord_to_index(v[0], (v[1] - 1 + N) % N, N);
-    }
-    if (z[1] > c[1]) {
-        p[0]++;
-        p[p[0]] = pixel_coord_to_index(v[0], (v[1] + 1) % N, N);
-    }
-    /* check the corners clocwise from v */ 
-    if (z[0] < b[0] && z[1] < b[1]) {
-        if (torus_squared_distance(a, z, torus_diameter) < r2) {
-            p[0]++;
-            p[p[0]] = pixel_coord_to_index((v[0] - 1 + N ) % N, 
-                    (v[1] - 1 + N) % N, N);
-        } 
-    } 
-    if (z[0] < b[0] && z[1] > c[1]) {
-        x[0] = a[0];
-        x[1] = d[1];
-        if (torus_squared_distance(x, z, torus_diameter) < r2) {
-            p[0]++;
-            p[p[0]] = pixel_coord_to_index((v[0] - 1 + N) % N, 
-                    (v[1] + 1) % N, N);
-        }
-    } 
-    if (z[0] > c[0] && z[1] > c[1]) {
-        if (torus_squared_distance(d, z, torus_diameter) < r2) {
-            p[0]++;
-            p[p[0]] = pixel_coord_to_index((v[0] + 1) % N, 
-                    (v[1] + 1) % N, N);
-        }
-    } 
-    if (z[0] > c[0] && z[1] < b[1]) {
-        x[0] = d[0];
-        x[1] = a[1];
-        if (torus_squared_distance(x, z, torus_diameter) < r2) {
-            p[0]++;
-            p[p[0]] = pixel_coord_to_index((v[0] + 1) % N, 
-                    (v[1] - 1 + N) % N, N);
-        }
-    }
-#ifdef CHECK_PIXELS 
-    unsigned int j;
-    unsigned int p2[10];
-    get_pixels_general(r, pixel_size, N, z, p2);
-    assert(p[0] == p2[0]);
-    gsl_sort_uint(p + 1, 1, p[0]);
-    gsl_sort_uint(p2 + 1, 1, p2[0]);
-    for (j = 1; j <= p2[0]; j++) {
-        assert(p[j] == p2[j]);
-    }
-#endif
-
-}
-
-
 /* Gets the pixels for the disc at the specified location and updates the pixel 
  * buffer.
  */
 static void 
 sim_get_disc_pixels(sim_t *self, double *z, double r)
 {
-    if (self->pixel_size < r) {
-        get_pixels_general(r, self->pixel_size, self->N, z, self->pixel_buffer);
-    } else {
-        get_pixels(r, self->pixel_size, self->N, z, self->pixel_buffer);
-    }
-
+    get_pixels_general(r, self->pixel_size, self->N, z, self->pixel_buffer);
 }
 
 /*
@@ -362,8 +276,7 @@ sim_alloc(sim_t *self)
         ret = ERR_BAD_PIXEL_SIZE;
         goto out;
     }
-
-    self->N = self->torus_diameter / self->pixel_size;
+    self->N = (unsigned int) self->torus_diameter / self->pixel_size;
     /* we assume that uint64_t >= size of a pointer */
     assert(sizeof(uint64_t) >= sizeof(uintptr_t));
     if (fmod(self->torus_diameter, self->pixel_size) != 0.0) {
@@ -377,6 +290,10 @@ sim_alloc(sim_t *self)
     }
     r = 0;
     for (j = 0; j < self->num_event_classes; j++) {
+        if (self->event_classes[j].r > self->torus_diameter / 4) {
+            ret = ERR_EVENT_TOO_LARGE;
+            goto out;
+        }
         if (self->event_classes[j].r > r) {
             r = self->event_classes[j].r;
         }
@@ -698,6 +615,10 @@ sim_add_individual_to_pixel(sim_t *self, unsigned int pixel, individual_t *ind)
     unsigned int h;
     uintptr_t id = (uintptr_t) ind;
     avl_node_t *node;
+    if (pixel >= self->N * self->N) {
+        printf("N = %d, pixel = %d\n", self->N, pixel);
+    }
+    assert(pixel < self->N * self->N);
     /* insert the id into this pixel */
     node = sim_alloc_avl_set_node(self, id);
     if (avl_insert_node(&self->P[pixel], node) == NULL) {

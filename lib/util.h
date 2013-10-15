@@ -31,6 +31,7 @@
 #define ERR_AVL_OP_FAILED -7
 #define ERR_MAX_OCCUPANCY_EXCEEDED -8
 #define ERR_BAD_DIMENSION -9
+#define ERR_EVENT_TOO_LARGE -10
 
 typedef struct {
     double rate;

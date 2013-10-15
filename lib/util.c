@@ -102,6 +102,9 @@ discsim_error_message(int err)
         case ERR_MAX_OCCUPANCY_EXCEEDED:
             ret = "max occupancy exceeded";
             break;
+        case ERR_EVENT_TOO_LARGE:
+            ret = "event radius too large";
+            break;
     }
     return ret;
 }

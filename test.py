@@ -22,9 +22,10 @@ Test cases for the discsim module.
 from __future__ import division
 from __future__ import print_function 
 
-import unittest
+import math
 import random
 import optparse
+import unittest
 
 import _discsim
 import discsim
@@ -439,7 +440,7 @@ class TestHighLevel(unittest.TestCase):
         self.assertEqual(llsim.get_max_population_size(), sim.max_population_size)
         self.assertEqual(llsim.get_max_occupancy(), sim.max_occupancy)
         self.assertEqual(llsim.get_dimension(), sim.dimension)
-        self.assertEqual(llsim.get_simulate_pedigree(), sim.simulate_pedigree)
+        self.assertEqual(bool(llsim.get_simulate_pedigree()), sim.simulate_pedigree)
         self.assertEqual(llsim.get_random_seed(), sim.random_seed)
         self.assertEqual(llsim.get_pixel_size(), sim.pixel_size)
         self.assertEqual(llsim.get_recombination_probability(), sim.recombination_probability)
@@ -457,13 +458,59 @@ class TestInterface(TestHighLevel):
     """
     def test_defaults(self):
         L = 100
-        sim = discsim.Simulator(L)
-        sim.sample = [None, (0,1), (2,0)]
-        sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
+        samples = [[None, (0,1), (2,0)], [None, 1, 2]]
+        for pedigree in [False, True]:
+            for s in samples: 
+                sim = discsim.Simulator(L, pedigree)
+                sim.sample = s
+                sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
+                sim.run(0)
+                self.verify_attributes(sim)
+                pop = sim.get_population()
+                if pedigree:
+                    self.assertEqual(set(x for x in pop), set(sim.sample[1:]))
+                else:
+                    self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
+               
+
+    def check_random_parameters(self, pedigree, dim):
+        s = 2 if dim == 1 else random.choice([0.5, 1.0, 1.25, 1.5, 2.0, 2.25]) 
+        L = random.randint(10, 100) * s
+        f = math.fmod(L, s)
+        sim = discsim.Simulator(L, pedigree)
+        sim.pixel_size = s
+        n = random.randint(2, 100)
+        if dim == 1:
+            sample = [random.uniform(0, L) for j in range(n)]
+        else:
+            sample = [(random.uniform(0, L), random.uniform(0, L)) 
+                    for j in range(n)]
+        sim.sample = [None] + sample
+        sim.max_population_size = len(sample)
+        sim.max_occupancy = len(sample)
+        ec = []
+        for j in range(random.randint(1, 5)):
+            r = random.uniform(0.1, 2)
+            u = random.uniform(0.01, 0.99)
+            rate = random.uniform(0.001, 1)
+            ec.append(ercs.DiscEventClass(r, u, rate))
+        sim.event_classes = ec
         sim.run(0)
         self.verify_attributes(sim)
         pop = sim.get_population()
-        self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
+        if pedigree:
+            self.assertEqual(set(x for x in pop), set(sim.sample[1:]))
+        else:
+            self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
+        
+    def test_random_parameters(self):
+        n = 10
+        for pedigree in [False, True]:
+            for dim in [1, 2]:
+                for j in range(n):
+                    self.check_random_parameters(pedigree, dim)
+
+
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] "
