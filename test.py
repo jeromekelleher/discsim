@@ -215,7 +215,7 @@ class TestInitialiser(unittest.TestCase):
                 self.assertEqual(2 * sample_size, len(tau[l]))
                 for a, t in zip(pi[l], tau[l]):
                     self.assertEqual(a, 0)
-                    self.assertEqual(a, 0.0)
+                    self.assertEqual(t, 0.0)
                 
         self.assertEqual(s.get_time(), 0.0)
         self.assertEqual(s.get_num_reproduction_events(), 0)
@@ -275,6 +275,7 @@ class TestSimulation(unittest.TestCase):
         L = 40
         self._sample = [(0,0), (L/2, L/2)]
         self._simulator = _discsim.Simulator(self._sample, events, 
+                random_seed=random.randint(1, 2**31),
                 torus_diameter=L, num_loci=1) 
         
        
@@ -324,7 +325,8 @@ class TestSimulation(unittest.TestCase):
             for s in [0.25, 0.5, 1, 2, 2.5]:
                 events = [{"r":r, "u":0.99, "rate":1}]
                 sim = _discsim.Simulator(sample, events, 
-                        torus_diameter=L, pixel_size=s) 
+                        torus_diameter=L, pixel_size=s,
+                        random_seed=random.randint(1, 2**31))
                 self.assertTrue(sim.run()) 
                 pi, tau = sim.get_history()
                 self.check_single_locus_history(pi, tau) 
@@ -344,7 +346,8 @@ class TestMultiLocusSimulation(unittest.TestCase):
             s = _discsim.Simulator(sample, events, torus_diameter=L, 
                     pixel_size=2, max_occupancy=1000, 
                     max_population_size=10**5,
-                    num_parents=2, num_loci=10**3, dimension=dim)
+                    num_parents=2, num_loci=10**3, dimension=dim,
+                    random_seed=random.randint(1, 2**31))
             # The population will rapidly grow to something 
             # fairly large and stable. Running this for a large n will
             # make memory leaks obvious.
@@ -448,10 +451,27 @@ class TestHighLevel(unittest.TestCase):
         llecs = llsim.get_event_classes()
         self.assertEqual(len(ecs), len(llecs))
         for ec, llec in zip(ecs, llecs):
-            d = ec.get_low_level_representation()
+            d = dict(ec.get_low_level_representation())
             del d[ec._TYPE]
             self.assertEqual(d, llec)
-
+    
+    def verify_history(self, sim):
+        """
+        Checks if the history of the specified simulator is consistent.
+        """
+        m = sim.num_loci
+        n = len(sim.sample) - 1
+        T = sim.get_time()
+        pi, tau = sim.get_history() 
+        self.assertEqual(m, len(pi))
+        self.assertEqual(m, len(tau))
+        for l in range(m):
+            self.assertEqual(2 * n, len(pi[l]))
+            self.assertEqual(2 * n, len(tau[l]))
+            for a, t in zip(pi[l], tau[l]):
+                self.assertTrue(0 <= a <= 2 * n)
+                self.assertTrue(0 <= t <= T)
+ 
 class TestInterface(TestHighLevel):
     """
     Tests to verify the high level interface.
@@ -465,17 +485,29 @@ class TestInterface(TestHighLevel):
                 sim.sample = s
                 sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
                 sim.run(0)
+                self.assertEqual(sim.get_time(), 0.0)
+                self.assertEqual(sim.get_num_reproduction_events(), 0)
                 self.verify_attributes(sim)
                 pop = sim.get_population()
                 if pedigree:
                     self.assertEqual(set(x for x in pop), set(sim.sample[1:]))
                 else:
                     self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
-               
+                    self.verify_history(sim)
+                t = L**sim.dimension * 50
+                if sim.run(t):
+                    self.assertTrue(sim.get_time() <= t)
+                else:
+                    self.assertTrue(sim.get_time() >= t)
+                self.verify_attributes(sim)
+                pop = sim.get_population()
+                if not pedigree:
+                    self.verify_history(sim)
 
+            
     def check_random_parameters(self, pedigree, dim):
         s = 2 if dim == 1 else random.choice([0.5, 1.0, 1.25, 1.5, 2.0, 2.25]) 
-        L = random.randint(10, 100) * s
+        L = random.randint(20, 25) * s
         f = math.fmod(L, s)
         sim = discsim.Simulator(L, pedigree)
         sim.pixel_size = s
@@ -486,23 +518,39 @@ class TestInterface(TestHighLevel):
             sample = [(random.uniform(0, L), random.uniform(0, L)) 
                     for j in range(n)]
         sim.sample = [None] + sample
-        sim.max_population_size = len(sample)
-        sim.max_occupancy = len(sample)
+        sim.max_population_size = 10000
+        sim.max_occupancy = 1000 
         ec = []
         for j in range(random.randint(1, 5)):
             r = random.uniform(0.1, 2)
             u = random.uniform(0.01, 0.99)
-            rate = random.uniform(0.001, 1)
+            rate = random.uniform(0.5, 1.5)
             ec.append(ercs.DiscEventClass(r, u, rate))
         sim.event_classes = ec
+        sim.num_parents = random.randint(1, 4)
+        if not pedigree:
+            sim.num_loci = random.randint(1, 5)
+        sim.recombination_probability = random.uniform(1e-4, 0.5)
         sim.run(0)
+        self.assertEqual(sim.get_time(), 0.0)
+        self.assertEqual(sim.get_num_reproduction_events(), 0)
         self.verify_attributes(sim)
         pop = sim.get_population()
         if pedigree:
             self.assertEqual(set(x for x in pop), set(sim.sample[1:]))
         else:
             self.assertEqual(set(x for x, a in pop), set(sim.sample[1:]))
-        
+            self.verify_history(sim)
+        t = 0
+        not_done = True
+        while not_done:
+            t += sim.torus_diameter**dim 
+            coalesced = sim.run(t)
+            events = sim.get_num_reproduction_events()
+            pop_size = len(sim.get_population())
+            if coalesced or events > 100 or pop_size > 1000:
+                not_done = False
+            
     def test_random_parameters(self):
         n = 10
         for pedigree in [False, True]:

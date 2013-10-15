@@ -162,6 +162,18 @@ class Simulator(object):
         t = dbl_max if until == None else until 
         return self.__simulator.run(t)
 
+    def get_time(self):
+        """
+        Returns the current time of the simulator.
+        """
+        return self.__simulator.get_time()
+
+    def get_num_reproduction_events(self):
+        """
+        Returns the number of reproduction events since the beginning
+        of the simulation.
+        """
+        return self.__simulator.get_num_reproduction_events()
     
     def get_population(self):
         """
@@ -174,4 +186,25 @@ class Simulator(object):
         Returns the history of the current ancestral population.
         """
         return self.__simulator.get_history()
+    
+    def print_state(self):
+        """
+        Prints a short summary of the state of the simulator.
+        """
+        print("torus_diameter = ", self.torus_diameter)
+        print("simulate_pedigree = ", self.simulate_pedigree)
+        print("sample = ", len(self.sample))
+        print("event_classes = ", len(self.event_classes))
+        for ec in self.event_classes:
+            print("\t", ec.get_low_level_representation())
+        print("num_parents = ", self.num_parents)
+        print("num_loci = ", self.num_loci)
+        print("recombination_probability = ", self.recombination_probability)
+        print("max_occupancy = ", self.max_occupancy)
+        print("max_population_size = ", self.max_population_size)
+        print("pixel_size = ", self.pixel_size)
+        print("dimension = ", self.dimension)
+        print("random_seed = ", self.random_seed)
+        print("population size = ", len(self.get_population()))
 
+        
