@@ -4,7 +4,7 @@ Efficient coalescent simulation in continuous space
 
 Simulates the coalescent for populations evolving in a spatial 
 continuum under the extinction/recolonisation model. This 
-package is a specialisation of the `ercs <https://pypi.python.org/pypi/ercs>`
+package is a specialisation of the `ercs <https://pypi.python.org/pypi/ercs>`_
 package, and provides a much more efficient method of 
 simulating the spatial coalescent for the disc model. 
 A very similar (but not identical) interface to ``ercs``

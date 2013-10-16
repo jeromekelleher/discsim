@@ -566,7 +566,7 @@ if __name__ == "__main__":
     parser.add_option("-s", "--random-seed", dest="random_seed",
             help="Random seed", default=1)
     parser.add_option("-n", "--name-case", dest="name",
-            help="Run this specified test", default="test")
+            help="Run this specified test", default="tests")
     parser.add_option("-i", "--iterations", dest="iterations",
             help="Repeat for i iterations", default="1")
     (options, args) = parser.parse_args()
