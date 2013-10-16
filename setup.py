@@ -32,15 +32,12 @@ _discsim_module = Extension('_discsim',
     libraries = ["gsl", "gslcblas"],
     include_dirs = [d])
 
-requirements = []
-v = sys.version_info[:2]
-if v < (2, 7) or v == (3, 0) or v == (3, 1):
-    requirements.append("argparse")
+requirements = ["ercs"]
 
 setup(
     name = "discsim",
     version = discsim_version, 
-    description = "Coalescent simulation in continuous space under the disc model",
+    description = "Efficient coalescent simulation in continuous space",
     author = "Jerome Kelleher",
     author_email = "jerome.kelleher@ed.ac.uk",
     url = "http://pypi.python.org/pypi/discsim", 
@@ -50,6 +47,7 @@ setup(
     classifiers = [
         "Programming Language :: C",
         "Programming Language :: Python",
+        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
         "Development Status :: 4 - Beta",
         "Environment :: Other Environment",
