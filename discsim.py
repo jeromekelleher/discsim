@@ -72,7 +72,10 @@ class Simulator(object):
         if self.pixel_size is None:
             self.pixel_size = 2.0
         if self.num_parents is None:
-            self.num_parents = 1 if self.num_loci is 1 else 2 
+            if self.simulate_pedigree:
+                self.num_parents = 2
+            else:
+                self.num_parents = 1 if self.num_loci is 1 else 2 
         if self.max_occupancy is None:
             r = self.event_classes[0].r
             u = self.event_classes[0].u
@@ -187,6 +190,13 @@ class Simulator(object):
         """
         return self.__simulator.get_history()
     
+    def reset(self):
+        """
+        Resets the simulation so that we can perform more replicates.
+        """
+        self.__simulator = None
+
+
     def print_state(self):
         """
         Prints a short summary of the state of the simulator.
@@ -205,6 +215,7 @@ class Simulator(object):
         print("pixel_size = ", self.pixel_size)
         print("dimension = ", self.dimension)
         print("random_seed = ", self.random_seed)
-        print("population size = ", len(self.get_population()))
+        n = 0 if self.__simulator is None else len(self.get_population())
+        print("population size = ", n)
 
         
