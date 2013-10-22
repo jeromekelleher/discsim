@@ -78,7 +78,9 @@ or on Fedora::
 GSL is available on most packaging systems; if it is not available on your
 platform, it can be installed from source.
 
-The ``discsim`` module also depends on the ``ercs`` Python module, which 
+The ``discsim`` module also depends on the 
+`ercs <https://pypi.python.org/pypi/ercs>`_
+Python module, which 
 must also be installed, using the same methods as outlined below.
 
 Once GSL has been installed we can build the ``discsim`` module using the 
@@ -109,16 +111,16 @@ like this::
 
         $ python setup.py build
         ... [Messages cut for brevity] ...
-        In file included from _ercsmodule.c:27:
-        lib/ercs.h:26:25: error: gsl/gsl_rng.h: No such file or directory
-        In file included from _ercsmodule.c:27:
-        lib/ercs.h:73: error: expected declaration specifiers or '...' before 'gsl_rng'
-        lib/ercs.h:94: error: expected specifier-qualifier-list before 'gsl_rng'
-        _ercsmodule.c: In function 'pyercs_simulate':
-        _ercsmodule.c:351: error: 'ercs_t' has no member named 'pi'
-        _ercsmodule.c:356: error: 'ercs_t' has no member named 'tau'
+        _discsimmodule.c:515: error: 'sim_t' has no member named 'time'
+        _discsimmodule.c: In function 'Simulator_get_num_reproduction_events':
+        _discsimmodule.c:529: error: 'sim_t' has no member named 'num_reproduction_events'
+        _discsimmodule.c: In function 'Simulator_get_history':
+        _discsimmodule.c:743: error: 'sim_t' has no member named 'pi'
+        _discsimmodule.c:748: error: 'sim_t' has no member named 'tau'
+        _discsimmodule.c: In function 'Simulator_run':
+        _discsimmodule.c:789: error: 'sim_t' has no member named 'time'
         error: command 'cc' failed with exit status 1
-
+        
 This can be remedied by using the ``gsl-config`` program to set the 
 the ``LDFLAGS`` and ``CFLAGS`` environment variables to 
 their correct values::
@@ -146,8 +148,16 @@ Operating system        Platform        Python          Compiler
 ================        ========        ======          ========
 Debian wheezy           x86_64          2.7.3           gcc 4.7.2	
 Debian wheezy           x86_64          3.2.3           gcc 4.7.2	
+Debian wheezy           x86             2.7.3           gcc 4.7.2	
 Debian squeeze          ppc64           2.6.6           gcc 4.4.5	
 Debian squeeze          ppc64           3.1.3           gcc 4.4.5	
+Debian squeeze          x86_64          2.6.6           gcc 4.4.5	
+Debian squeeze          x86_64          3.1.3           gcc 4.4.5	
+FreeBSD 9.2             x86_64          2.7.5           gcc 4.2.1
+FreeBSD 9.2             x86_64          3.3.2           gcc 4.2.1
+Fedora 19               x86_64          2.7.5           gcc 4.8.1
+Fedora 19               x86_64          3.3.2           gcc 4.8.1
+SunOS 5.10              SPARC           3.3.2           gcc 4.8.0 
 ================        ========        ======          ========
 
 
