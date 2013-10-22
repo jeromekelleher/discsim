@@ -32,15 +32,22 @@ import numbers
 import ercs
 import _discsim
 
-__version__ = '1.0.0a1'
+__version__ = '1.0.0b1'
 
 class Simulator(object):
     """
-    Class presenting the simulation interface for the disc model 
-    in one and two dimensions. Both genetic and pedigree ancestors 
-    can be simulated.
+    Simulate the extinction/recolonisation continuum disc model
+    in one or two dimensions, tracking either the genetic ancestors
+    (and their genealogies at multiple loci) or the pedigree ancestors.
+    If ``simulate_pedigree`` is ``True``, simulate the locations of the 
+    pedigree ancestors of the sample; otherwise, simulate the locations
+    and ancestry of the genetic ancestors of the sample over muliple 
+    loci.
     """
     def __init__(self, torus_diameter, simulate_pedigree=False):
+        """
+        Allocates a new simulator object on a torus of the specified diameter.
+        """
         self.torus_diameter = torus_diameter
         self.simulate_pedigree = simulate_pedigree 
         self.sample = None 
@@ -155,9 +162,17 @@ class Simulator(object):
     def run(self, until=None):
         """
         Runs the simulation until coalescence or the specified time is 
-        exceeded. If until is not specified simulate until complete 
+        exceeded. If ``until`` is not specified simulate until complete 
         coalescence. Returns True if the sample coalesced, and False 
         otherwise.
+        
+        :param until: the time to simulate to.
+        :type until: float
+        :return: ``True`` if the sample has completely coalesced; ``False`` 
+            otherwise. 
+        :rtype: Boolean
+        :raises: :exc:`_discsim.LibraryError` when the C library encounters an 
+            error
         """
         if self.__simulator == None:
             self.__allocate_simulator()
@@ -180,19 +195,39 @@ class Simulator(object):
     
     def get_population(self):
         """
-        Returns the current state of the population.
+        Returns the current state of the population. For a pedigree simulation,
+        this returns the current locations of all individuals; in a genetic 
+        simulation, this also returns the ancestral material mappings for 
+        each individual.
+
+        :return: the current state of the population.
+        :rtype: A list describing the state of each extant ancestor. For a
+            pedigree simulation, this is a list of locations. For a genetic 
+            simulation, this is a list of tuples ``(x, a)``, where ``x``
+            is the location of the ancestor and ``a`` is its ancestry. The 
+            ancestry is a dictionary mapping a locus to the node it occupies 
+            in the genealogy for that locus.
         """
         return self.__simulator.get_population()
 
     def get_history(self):
         """
-        Returns the history of the current ancestral population.
+        Returns the history of the current ancestral population. This is 
+        not defined for a pedigree simulation.
+       
+        :return: the simulated history of the sample, (pi, tau)
+        :rtype: a tuple ``(pi, tau)``; ``pi`` is a list of lists of integers, 
+            and ``tau`` is a list of lists of doubles
+        :raises: :exc:`NotImplementedError` if called for a pedigree 
+            simulation.
         """
         return self.__simulator.get_history()
     
     def reset(self):
         """
-        Resets the simulation so that we can perform more replicates.
+        Resets the simulation so that we can perform more replicates. This must 
+        be called if any attributes of the simulation are changed; otherwise, 
+        these changes will have no effect.
         """
         self.__simulator = None
 
@@ -203,7 +238,7 @@ class Simulator(object):
         """
         print("torus_diameter = ", self.torus_diameter)
         print("simulate_pedigree = ", self.simulate_pedigree)
-        print("sample = ", len(self.sample))
+        print("sample = ", len(self.sample) - 1)
         print("event_classes = ", len(self.event_classes))
         for ec in self.event_classes:
             print("\t", ec.get_low_level_representation())

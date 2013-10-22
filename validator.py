@@ -234,7 +234,7 @@ def run_wave_replicates(sim, times, num_replicates, worker_pool=None):
     else:
         replicates = worker_pool.map(subprocess_wave_worker, args)
     mean_n = []
-    for j, t in enumerate(times):
+    for j in range(len(times)):
         n = []
         for r in replicates:
             n.append(r[j])
@@ -263,16 +263,14 @@ def wave_1d(u, num_loci=0):
     pyplot.axhline(0.797 * N)
     pyplot.show()
 
-
-
 def main():
     #simple_identity_check(rate=0.5)
     #simple_identity_check(r=0.93, u=0.133, rate=0.5, num_parents=2, 
     #        num_replicates=10**6, mutation_rate=1e-7)
-    mixed_events_identity_check(100000)
+    #mixed_events_identity_check(100000)
     #plot_mixed_events_identity()
     #single_locus_diffusion(u=0.0000125, r=1, rate=1.0)
-    #wave_1d(u=0.005)
+    wave_1d(u=0.005)
     #wave_1d(u=0.005, num_loci=100000)
 
 if __name__ == "__main__":

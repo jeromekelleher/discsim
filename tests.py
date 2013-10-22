@@ -484,6 +484,7 @@ class TestInterface(TestHighLevel):
                 sim = discsim.Simulator(L, pedigree)
                 sim.sample = s
                 sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
+                sim.max_population_size = 10000
                 sim.run(0)
                 self.assertEqual(sim.get_time(), 0.0)
                 self.assertEqual(sim.get_num_reproduction_events(), 0)
@@ -505,6 +506,25 @@ class TestInterface(TestHighLevel):
                     self.verify_history(sim)
 
             
+    def test_memory_exhaustion(self):
+        """
+        Verify that we exhaust memory correctly.
+        """ 
+        samples = [[None, (0,0), (50,0)], [None, 1, 50]]
+        for pedigree in [False, True]:
+            for s in samples: 
+                sim = discsim.Simulator(100, pedigree)
+                sim.sample = s
+                if not pedigree:
+                    sim.num_loci = 1000
+                sim.event_classes = [ercs.DiscEventClass(1, 0.1)]
+                sim.max_population_size = 10
+                self.assertRaises(_discsim.LibraryError, sim.run)
+                sim.reset()
+                sim.max_population_size = 1000
+                sim.max_occupancy = 4
+                self.assertRaises(_discsim.LibraryError, sim.run)
+                
     def check_random_parameters(self, pedigree, dim):
         s = 2 if dim == 1 else random.choice([0.5, 1.0, 1.25, 1.5, 2.0, 2.25]) 
         L = random.randint(20, 25) * s
