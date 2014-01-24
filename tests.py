@@ -293,8 +293,6 @@ class TestSimulation(unittest.TestCase):
                 self.assertTrue(sim_t <= t)
             else:
                 self.assertTrue(t <= sim_t)
-                
-           
 
     def check_single_locus_history(self, pi, tau):
         self.assertEqual(len(pi), 1)
@@ -339,7 +337,7 @@ class TestMultiLocusSimulation(unittest.TestCase):
 
     def test_memory(self):
         n = 100
-        samples = [(1, [0, 0]), (2, [(0,0), (0,0)])]
+        samples = [(1, [0]), (2, [(0,0)]), (1, [0, 0]), (2, [(0,0), (0,0)])]
         events = [{"r":1, "u":0.01, "rate":1}]
         L = 100
         for dim, sample in samples:
@@ -398,6 +396,46 @@ class TestPedigreeSimulation(unittest.TestCase):
                         self.assertTrue(isinstance(x[0], float))
                         self.assertTrue(isinstance(x[1], float))
                 self.assertRaises(NotImplementedError, s.get_history)
+
+class TestSingleSample(unittest.TestCase):
+    """
+    Tests the behaviour of the simulations when we sample a single 
+    individual.
+    """
+    def test_single_locus(self):
+        n = 50
+        sample = [1]
+        events = [{"r":1, "u":0.01, "rate":1}]
+        L = 100
+        dim = 1
+        s = _discsim.Simulator(sample, events, torus_diameter=L, 
+                pixel_size=2, max_occupancy=1000, 
+                max_population_size=10**5,
+                num_parents=2, num_loci=1, dimension=dim, 
+                simulate_pedigree=0)
+        for j in range(n):
+            s.run(j * 10 * L**dim)
+            pop = s.get_population()
+            assert len(pop) == 1 
+    
+    def test_multi_locus(self):
+        n = 50
+        sample = [1]
+        events = [{"r":1, "u":0.01, "rate":1}]
+        L = 100
+        dim = 1
+        m = 10
+        s = _discsim.Simulator(sample, events, torus_diameter=L, 
+                pixel_size=2, max_occupancy=1000, 
+                max_population_size=10**5,
+                num_parents=2, num_loci=m, dimension=dim, 
+                simulate_pedigree=0)
+        for j in range(n):
+            s.run(j * 10 * L**dim)
+            pop = s.get_population()
+            assert len(pop) <= m 
+    
+
 
 
 class TestIdentity(unittest.TestCase):

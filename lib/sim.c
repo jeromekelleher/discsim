@@ -752,6 +752,12 @@ sim_initialise(sim_t *self)
     self->num_reproduction_events = 0;
     self->num_non_reproduction_events = 0;
     self->ancestral_material = self->sample_size * self->num_loci;
+    if (self->sample_size == 1) {
+        /* when the sample size is 1, we simulate the history of the 
+         * sample indefinitely
+         */
+        self->ancestral_material++;
+    }
 out:
     return ret;
 }
@@ -809,8 +815,6 @@ sim_get_large_event_children(sim_t *self, double *z, double r, double u)
 out: 
     return ret;
 }
-
-
 
 
 static double 
