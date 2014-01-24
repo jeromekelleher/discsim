@@ -32,7 +32,7 @@ import numbers
 import ercs
 import _discsim
 
-__version__ = '1.0.0b1'
+__version__ = '1.0.0b2'
 
 class Simulator(object):
     """
@@ -102,8 +102,8 @@ class Simulator(object):
         """
         if self.sample is None:
             raise ValueError("sample must be specified")
-        if len(self.sample) < 3:
-            raise ValueError("At least two samples must be specified")
+        if len(self.sample) < 2:
+            raise ValueError("At least one sample must be specified")
         if self.sample[0] is not None:
             raise ValueError("zeroth element of list samples must be None")
         sample = self.sample[1:] 
