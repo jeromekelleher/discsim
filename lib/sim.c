@@ -27,7 +27,6 @@
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
 
-#define CHECK_PIXELS
 #include <gsl/gsl_sort.h>
 
 static int 
@@ -615,9 +614,6 @@ sim_add_individual_to_pixel(sim_t *self, unsigned int pixel, individual_t *ind)
     unsigned int h;
     uintptr_t id = (uintptr_t) ind;
     avl_node_t *node;
-    if (pixel >= self->N * self->N) {
-        printf("N = %d, pixel = %d\n", self->N, pixel);
-    }
     assert(pixel < self->N * self->N);
     /* insert the id into this pixel */
     node = sim_alloc_avl_set_node(self, id);
