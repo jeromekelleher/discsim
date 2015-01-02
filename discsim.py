@@ -1,28 +1,28 @@
-# 
+#
 # Copyright (C) 2013 Jerome Kelleher <jerome.kelleher@ed.ac.uk>
 #
 # This file is part of discsim.
-# 
+#
 # discsim is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # discsim is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with discsim.  If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 """
-Coalescent simulation in continuous space under the disc replacement 
+Coalescent simulation in continuous space under the disc replacement
 model.
 
 """
 from __future__ import division
-from __future__ import print_function 
+from __future__ import print_function
 
 import sys
 import math
@@ -32,16 +32,16 @@ import numbers
 import ercs
 import _discsim
 
-__version__ = '1.0.0b2'
+__version__ = '1.0.0'
 
 class Simulator(object):
     """
     Simulate the extinction/recolonisation continuum disc model
     in one or two dimensions, tracking either the genetic ancestors
     (and their genealogies at multiple loci) or the pedigree ancestors.
-    If ``simulate_pedigree`` is ``True``, simulate the locations of the 
+    If ``simulate_pedigree`` is ``True``, simulate the locations of the
     pedigree ancestors of the sample; otherwise, simulate the locations
-    and ancestry of the genetic ancestors of the sample over muliple 
+    and ancestry of the genetic ancestors of the sample over muliple
     loci.
     """
     def __init__(self, torus_diameter, simulate_pedigree=False):
@@ -49,12 +49,12 @@ class Simulator(object):
         Allocates a new simulator object on a torus of the specified diameter.
         """
         self.torus_diameter = torus_diameter
-        self.simulate_pedigree = simulate_pedigree 
-        self.sample = None 
-        self.event_classes = None 
+        self.simulate_pedigree = simulate_pedigree
+        self.sample = None
+        self.event_classes = None
         self.num_parents = None
         self.num_loci = None
-        self.recombination_probability = None 
+        self.recombination_probability = None
         self.max_occupancy = None
         self.max_population_size = None
         self.pixel_size = None
@@ -65,7 +65,7 @@ class Simulator(object):
 
     def __set_defaults(self):
         """
-        Sets up the default values for instances that have not been 
+        Sets up the default values for instances that have not been
         specified.
         """
         if self.recombination_probability is None:
@@ -75,29 +75,29 @@ class Simulator(object):
         if self.random_seed is None:
             self.random_seed = random.randint(0, 2**31)
         if self.max_population_size is None:
-            self.max_population_size = 1000 
+            self.max_population_size = 1000
         if self.pixel_size is None:
             self.pixel_size = 2.0
         if self.num_parents is None:
             if self.simulate_pedigree:
                 self.num_parents = 2
             else:
-                self.num_parents = 1 if self.num_loci is 1 else 2 
+                self.num_parents = 1 if self.num_loci is 1 else 2
         if self.max_occupancy is None:
             r = self.event_classes[0].r
             u = self.event_classes[0].u
             s = self.pixel_size
             N = self.num_parents / u
-            area = s + 2 * r 
+            area = s + 2 * r
             if self.dimension == 2:
-                area = s**2 + 4 * r * s + math.pi * r**2 
+                area = s**2 + 4 * r * s + math.pi * r**2
             # a density of N per unit area is probably overkill
             self.max_occupancy = int(area * N)
 
     def __convert_sample(self):
         """
-        Coverts the sample of locations in the sample instance variable to 
-        the format used by _ercs, a zero-indexed list. The zero'th element 
+        Coverts the sample of locations in the sample instance variable to
+        the format used by _ercs, a zero-indexed list. The zero'th element
         of this list must be None
         """
         if self.sample is None:
@@ -106,7 +106,7 @@ class Simulator(object):
             raise ValueError("At least one sample must be specified")
         if self.sample[0] is not None:
             raise ValueError("zeroth element of list samples must be None")
-        sample = self.sample[1:] 
+        sample = self.sample[1:]
         last_dim = None
         dim = None
         for x in sample:
@@ -133,24 +133,24 @@ class Simulator(object):
             if not isinstance(ec, ercs.DiscEventClass):
                 raise ValueError("Only events from the disc model are supported")
         llec = [ec.get_low_level_representation() for ec in self.event_classes]
-        return llec 
+        return llec
 
 
     def __allocate_simulator(self):
         """
-        Allocates a new simulator instance with the required instance 
+        Allocates a new simulator instance with the required instance
         variables.
         """
         sample = self.__convert_sample()
         events = self.__convert_events()
         self.__set_defaults()
-        self.__simulator = _discsim.Simulator(sample, events, 
-                    num_loci=self.num_loci, torus_diameter=self.torus_diameter, 
+        self.__simulator = _discsim.Simulator(sample, events,
+                    num_loci=self.num_loci, torus_diameter=self.torus_diameter,
                     pixel_size=self.pixel_size, random_seed=self.random_seed,
-                    recombination_probability=self.recombination_probability, 
-                    num_parents=self.num_parents, 
+                    recombination_probability=self.recombination_probability,
+                    num_parents=self.num_parents,
                     simulate_pedigree=int(self.simulate_pedigree),
-                    max_population_size=self.max_population_size, 
+                    max_population_size=self.max_population_size,
                     max_occupancy=self.max_occupancy, dimension=self.dimension)
 
     def get_ll_object(self):
@@ -161,23 +161,23 @@ class Simulator(object):
 
     def run(self, until=None):
         """
-        Runs the simulation until coalescence or the specified time is 
-        exceeded. If ``until`` is not specified simulate until complete 
-        coalescence. Returns True if the sample coalesced, and False 
+        Runs the simulation until coalescence or the specified time is
+        exceeded. If ``until`` is not specified simulate until complete
+        coalescence. Returns True if the sample coalesced, and False
         otherwise.
-        
+
         :param until: the time to simulate to.
         :type until: float
-        :return: ``True`` if the sample has completely coalesced; ``False`` 
-            otherwise. 
+        :return: ``True`` if the sample has completely coalesced; ``False``
+            otherwise.
         :rtype: Boolean
-        :raises: :exc:`_discsim.LibraryError` when the C library encounters an 
+        :raises: :exc:`_discsim.LibraryError` when the C library encounters an
             error
         """
         if self.__simulator == None:
             self.__allocate_simulator()
         dbl_max = sys.float_info.max
-        t = dbl_max if until == None else until 
+        t = dbl_max if until == None else until
         return self.__simulator.run(t)
 
     def get_time(self):
@@ -192,41 +192,41 @@ class Simulator(object):
         of the simulation.
         """
         return self.__simulator.get_num_reproduction_events()
-    
+
     def get_population(self):
         """
         Returns the current state of the population. For a pedigree simulation,
-        this returns the current locations of all individuals; in a genetic 
-        simulation, this also returns the ancestral material mappings for 
+        this returns the current locations of all individuals; in a genetic
+        simulation, this also returns the ancestral material mappings for
         each individual.
 
         :return: the current state of the population.
         :rtype: A list describing the state of each extant ancestor. For a
-            pedigree simulation, this is a list of locations. For a genetic 
+            pedigree simulation, this is a list of locations. For a genetic
             simulation, this is a list of tuples ``(x, a)``, where ``x``
-            is the location of the ancestor and ``a`` is its ancestry. The 
-            ancestry is a dictionary mapping a locus to the node it occupies 
+            is the location of the ancestor and ``a`` is its ancestry. The
+            ancestry is a dictionary mapping a locus to the node it occupies
             in the genealogy for that locus.
         """
         return self.__simulator.get_population()
 
     def get_history(self):
         """
-        Returns the history of the current ancestral population. This is 
+        Returns the history of the current ancestral population. This is
         not defined for a pedigree simulation.
-       
+
         :return: the simulated history of the sample, (pi, tau)
-        :rtype: a tuple ``(pi, tau)``; ``pi`` is a list of lists of integers, 
+        :rtype: a tuple ``(pi, tau)``; ``pi`` is a list of lists of integers,
             and ``tau`` is a list of lists of doubles
-        :raises: :exc:`NotImplementedError` if called for a pedigree 
+        :raises: :exc:`NotImplementedError` if called for a pedigree
             simulation.
         """
         return self.__simulator.get_history()
-    
+
     def reset(self):
         """
-        Resets the simulation so that we can perform more replicates. This must 
-        be called if any attributes of the simulation are changed; otherwise, 
+        Resets the simulation so that we can perform more replicates. This must
+        be called if any attributes of the simulation are changed; otherwise,
         these changes will have no effect.
         """
         self.__simulator = None
@@ -253,4 +253,4 @@ class Simulator(object):
         n = 0 if self.__simulator is None else len(self.get_population())
         print("population size = ", n)
 
-        
+
