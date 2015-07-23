@@ -57,6 +57,16 @@ typedef struct {
      * only the locations of the ancestors is relevent.
      */
     int simulate_pedigree; 
+		/* if 1 a panmictic ancestral recombination graph simulation is run to 
+		 * conclude simulation to a most recent common ancestor after a specified
+		 * number of spatial generations
+		 */
+		int simulate_kingman; 
+		/* number of generations to simulate before transitioning to the ARG
+		 * simulation
+		 */
+		double Ne;
+		double rho;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;
@@ -118,6 +128,8 @@ void sim_set_max_occupancy(sim_t *self, double headroom);
 int sim_alloc(sim_t *self);
 int sim_initialise(sim_t *self);
 int sim_simulate(sim_t *self, uint64_t max_events);
+int sim_simulate_arg(sim_t *self);
+int sim_setup_arg(sim_t *self);
 void sim_print_parameters(sim_t *self);
 int sim_print_state(sim_t *self, int detail);
 int sim_get_population(sim_t *self, avl_tree_t *pop);
