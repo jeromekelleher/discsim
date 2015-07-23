@@ -57,16 +57,16 @@ typedef struct {
      * only the locations of the ancestors is relevent.
      */
     int simulate_pedigree; 
-		/* if 1 a panmictic ancestral recombination graph simulation is run to 
-		 * conclude simulation to a most recent common ancestor after a specified
-		 * number of spatial generations
-		 */
-		int simulate_kingman; 
-		/* number of generations to simulate before transitioning to the ARG
-		 * simulation
-		 */
-		double Ne;
-		double rho;
+    /* if 1 a panmictic ancestral recombination graph simulation is run to 
+     * conclude simulation to a most recent common ancestor after a specified
+     * number of spatial generations
+     */
+    int simulate_kingman; 
+    /* number of generations to simulate before transitioning to the ARG
+     * simulation
+     */
+    double Ne;
+    double rho;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;

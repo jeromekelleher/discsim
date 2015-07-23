@@ -281,13 +281,10 @@ run_sim(const char *config_file)
         }
         not_done = ret != 0; 
     }
-    printf("Space done\n");
     if(self->simulate_kingman == 1) {
-			ret = sim_setup_arg(self);
-			printf("Transition done\n");
-			ret = sim_simulate_arg(self);
-		}
-		printf("All done\n");
+        ret = sim_setup_arg(self);
+        ret = sim_simulate_arg(self);
+    }
     
     ret = sim_print_state(self, 2); 
     if (ret != 0) {
