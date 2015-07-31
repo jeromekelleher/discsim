@@ -909,13 +909,13 @@ static int
 sim_generate_parents(sim_t *self, int arg_flag)
 {
     int ret = 0;
-    unsigned int i = 0, j, parent, previous_locus, break_point = 0;
+    unsigned int i, j, parent, previous_locus, break_point, gap_no, current_parent;
     individual_t **C = self->child_buffer;
-    unsigned int gap_no = avl_count(&C[0]->ancestry) - 1;
     avl_node_t *node;
     int_map_value_t *locus_mapping;
+    double total_rate, site_1, site_2, coin;
+    gap_no = avl_count(&C[0]->ancestry) - 1;
     double recomb_rates[gap_no];
-    double total_rate = 0.0, site_1 = 0.0, site_2 = 0.0;
     for (j = 0; j < self->num_parents; j++) {
         self->parent_buffer[j] = sim_alloc_individual(self);
         if (self->parent_buffer[j] == NULL) {
@@ -926,26 +926,28 @@ sim_generate_parents(sim_t *self, int arg_flag)
     /* In case of a recombination event in the Kingman phase
      * we require exactly one recombination point.
      */
-    if(arg_flag == 1) {
+    if (arg_flag == 1) {
         node = C[0]->ancestry.head;
         locus_mapping = (int_map_value_t *) node->item;
-        site_2 = (double)(locus_mapping->key);
+        site_2 = (double) locus_mapping->key;
         node = node->next;
-        while(node != NULL) {
+				total_rate = 0.0;
+        while (node != NULL) {
             site_1 = site_2;
             locus_mapping = (int_map_value_t *) node->item;
-            site_2 = (double)(locus_mapping->key);
+            site_2 = (double) locus_mapping->key;
             recomb_rates[i] = site_2 - site_1;
             total_rate += recomb_rates[i];
             i++;
             node = node->next;
         } 
         recomb_rates[0] /= total_rate;
-        for(j = 1; j < gap_no; j++) {
+        for (j = 1; j < gap_no; j++) {
             recomb_rates[j] = recomb_rates[j - 1] + recomb_rates[j] / total_rate;
         }
-        double coin = gsl_rng_uniform(self->rng);
-        while(coin > recomb_rates[break_point]) {
+        coin = gsl_rng_uniform(self->rng);
+				break_point = 0;
+        while (coin > recomb_rates[break_point]) {
             break_point++;
         }
     }
@@ -955,7 +957,6 @@ sim_generate_parents(sim_t *self, int arg_flag)
             /* Assign the parent for the first locus */
             parent = gsl_rng_uniform_int(self->rng, self->num_parents);
             node = C[j]->ancestry.head;
-            i = 0;
             assert(node != NULL);
             locus_mapping = (int_map_value_t *) node->item;
             ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
@@ -964,6 +965,7 @@ sim_generate_parents(sim_t *self, int arg_flag)
                 goto out;
             }
             previous_locus = locus_mapping->key;
+						i = 0;
             while (node->next != NULL) {
                 node = node->next; 
                 i++;
@@ -975,11 +977,11 @@ sim_generate_parents(sim_t *self, int arg_flag)
                 }
                 /*Track the recombination point in the Kingman phase*/
                 else {
-                    if(i == break_point + 1) {
+                    if (i == break_point + 1) {
                         if (self->num_parents == 2) {
                             parent = (parent + 1) % 2;
                         } else {
-                            unsigned int current_parent = parent;
+                            current_parent = parent;
                             while (parent == current_parent) {
                                 ret = gsl_rng_uniform_int(self->rng, self->num_parents);
                             }
@@ -1039,11 +1041,11 @@ sim_complete_event(sim_t *self, double *z, double r, int arg_flag, int transitio
             /* When transitioning between the spatial and Kingman phases
              * individuals need to be added so that they overlap with exactly
              * one pixel.    */
-            if(transition_flag == 1) {
+            if (transition_flag == 1) {
                 self->event_classes[0].r = self->pixel_size / 4.0;
             }
             ret = sim_add_individual(self, ind);
-            if(transition_flag == 1) {
+            if (transition_flag == 1) {
                 self->event_classes[0].r = transition_radius;
             }
             if (ret != 0) {
@@ -1250,7 +1252,7 @@ out:
 int
 sim_simulate_arg(sim_t *self) 
 {
-    int ret = 0;
+    int ret = 0, i;
     double recomb_rate, coal_rate, total_rate; 
     individual_t **S = self->intersected_buffer;
     unsigned int S_size = 0;
@@ -1260,11 +1262,12 @@ sim_simulate_arg(sim_t *self)
     individual_t *ind;
     /* An arbitrary radius and parental location for using existing spatial 
      * functions to complete events */
-    double z[] = {self->pixel_size / 2.0, self->pixel_size / 2.0}, r = self->pixel_size / 4.0;
-    if(self->dimension == 1) {
+    double r = self->pixel_size / 4.0;
+    double z[] = {self->pixel_size / 2.0, self->pixel_size / 2.0};
+    if (self->dimension == 1) {
         z[1] = 0.0;
     }
-    while(self->ancestral_material > self->num_loci) {
+    while (self->ancestral_material > self->num_loci) {
         coal_rate = 2.0 * self->Ne * gsl_sf_choose(((set_map_value_t *)self->Q.head->item)->key, 2);
         recomb_rate = 0.0;
         S_size = 0;
@@ -1279,7 +1282,7 @@ sim_simulate_arg(sim_t *self)
         }
         total_rate = coal_rate + recomb_rate;
         self->time += gsl_ran_exponential(self->rng, 1.0 / total_rate);
-        if(gsl_rng_uniform(self->rng) < coal_rate / total_rate) {
+        if (gsl_rng_uniform(self->rng) < coal_rate / total_rate) {
             // Coalescence event
             self->num_parents = 1;
             self->num_children = 2;
@@ -1288,8 +1291,7 @@ sim_simulate_arg(sim_t *self)
             if (ret != 0) {
                 goto out;
             }
-        }
-        else {
+        } else {
             // Recombination event
             self->num_parents = 2;
             self->num_children = 1;
@@ -1319,22 +1321,20 @@ sim_setup_arg(sim_t *self)
     uint64_t id;
     individual_t *ind;
     unsigned int pixel_occ, i, j;
-    self->num_parents = 1;
-    self->num_children = 1;
-    double z[] = {self->pixel_size / 2.0, self->pixel_size / 2.0}, r = self->pixel_size / 4.0;
-    if(self->dimension == 1) {
+    double r = self->pixel_size / 4.0;
+    double z[] = {self->pixel_size / 2.0, self->pixel_size / 2.0};
+    if (self->dimension == 1) {
         z[1] = 0.0;
     }
-    sim_print_state(self, 1);
-    for(j = 0; j < self->N * self->N; j++) {
+    self->num_parents = 1;
+    self->num_children = 1;
+    for (j = 0; j < self->N * self->N; j++) {
         pixel_occ = avl_count(&self->P[j]);
-        printf("pixel = %d, occ = %d\n", j, pixel_occ);
         for(i = 0; i < pixel_occ; i++) {
             node = self->P[j].head;
             id = *((uint64_t *) node->item);
             int_ptr = (uintptr_t) id;
             ind = (individual_t *) int_ptr;
-            printf("ind = %d, loc = (%f, %f)\n", i, ind->location[0], ind->location[1]);
             self->child_buffer[0] = ind;
             ret = sim_complete_event(self, z, r, 0, 1);
         }
