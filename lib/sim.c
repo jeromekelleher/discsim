@@ -1252,7 +1252,7 @@ out:
 int
 sim_simulate_arg(sim_t *self) 
 {
-    int ret = 0, i;
+    int ret = 0;
     double recomb_rate, coal_rate, total_rate; 
     individual_t **S = self->intersected_buffer;
     unsigned int S_size = 0;
