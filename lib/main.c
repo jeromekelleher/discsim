@@ -281,9 +281,15 @@ run_sim(const char *config_file)
         }
         not_done = ret != 0; 
     }
-    if(self->simulate_kingman == 1) {
+    if (self->simulate_kingman == 1) {
         ret = sim_setup_arg(self);
+        if (ret != 0) {
+            goto out;
+        }
         ret = sim_simulate_arg(self);
+        if (ret != 0) {
+            goto out;
+        }
     }
     
     ret = sim_print_state(self, 2); 
