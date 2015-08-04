@@ -191,6 +191,11 @@ read_sim_config(sim_t *self, const char *filename)
         fatal_error("simulate_pedigree is a required parameter");
     }
     self->simulate_pedigree = tmp;
+    if (config_lookup_int(config, "simulate_kingman", &tmp) 
+            == CONFIG_FALSE) {
+        fatal_error("simulate_kingman is a required parameter");
+    }
+    self->simulate_kingman = tmp;
     if (config_lookup_int(config, "num_parents", &tmp) 
             == CONFIG_FALSE) {
         fatal_error("num_parents is a required parameter");
@@ -233,11 +238,17 @@ read_sim_config(sim_t *self, const char *filename)
                 &self->max_time) == CONFIG_FALSE) {
         fatal_error("max_time is a required parameter");
     }
-
-
     if (config_lookup_float(config, "recombination_probability", 
                 &self->recombination_probability) == CONFIG_FALSE) {
         fatal_error("recombination_probability is a required parameter");
+    }
+    if (config_lookup_float(config, "rho", 
+                &self->rho) == CONFIG_FALSE) {
+        fatal_error("rho is a required parameter");
+    }
+    if (config_lookup_float(config, "Ne", 
+                &self->Ne) == CONFIG_FALSE) {
+        fatal_error("Ne is a required parameter");
     }
 
     self->event_classes = read_events(config, &self->num_event_classes);    
@@ -269,6 +280,16 @@ run_sim(const char *config_file)
             goto out;
         }
         not_done = ret != 0; 
+    }
+    if (self->simulate_kingman == 1) {
+        ret = sim_setup_arg(self);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = sim_simulate_arg(self);
+        if (ret != 0) {
+            goto out;
+        }
     }
     
     ret = sim_print_state(self, 2); 
