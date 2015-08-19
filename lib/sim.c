@@ -173,8 +173,8 @@ index_to_pixel_coord(int index, unsigned int N, unsigned int *v)
 double
 beta(int n, int k, double u)
 {
-    double ret = gsl_sf_choose(n, k);
-    ret *= gsl_pow_int(u, k) * gsl_pow_int(1.0 - u, n - k);
+    double ret = exp(gsl_sf_lnchoose(n, k) + (double) k * log(u)
+        + (double)(n - k) * log(1.0 - u));
     ret /= 1.0 - gsl_pow_int(1.0 - u, n);
     return ret;
 
