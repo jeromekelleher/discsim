@@ -173,11 +173,9 @@ index_to_pixel_coord(int index, unsigned int N, unsigned int *v)
 double
 beta(int n, int k, double u)
 {
-    double ret = exp(gsl_sf_lnchoose(n, k) + (double) k * log(u)
-        + (double)(n - k) * log(1.0 - u));
+    double ret = exp(gsl_sf_lnchoose(n, k) + (double)(k) * log(u) + (double)(n - k) * log(1.0 - u));
     ret /= 1.0 - gsl_pow_int(1.0 - u, n);
     return ret;
-
 }
 
 static inline double 
@@ -218,6 +216,15 @@ get_pixels_general(double r, double pixel_size, int N, double *z, unsigned int *
     int x_max = (int) ceil((z[0] + r) / pixel_size);
     int y_min = (int) floor((z[1] - r) / pixel_size);
     int y_max = (int) ceil((z[1] + r) / pixel_size);
+    /* We prevent wrapping around onto the same pixel more than once in the case
+    * of only one pixel, which happens in the Kingman simulation.
+    */
+    if (N == 1) {
+        x_min = 0;
+        x_max = 0;
+        y_min = 0;
+        y_max = 0;
+    }
     int x, y;
     int coord[2];
     p[0] = 0;
@@ -584,6 +591,7 @@ sim_remove_pixel_from_occupancy(sim_t *self, unsigned int h, unsigned int pixel)
         smv_search.key = h;
         q_node = avl_search(&self->Q, &smv_search);
         if (q_node == NULL) {
+            printf("q_node error");
             ret = ERR_AVL_OP_FAILED;
             goto out;
         }
@@ -593,6 +601,7 @@ sim_remove_pixel_from_occupancy(sim_t *self, unsigned int h, unsigned int pixel)
         set_value = (uint64_t) pixel;
         h_node = avl_search(tree, &set_value);
         if (h_node == NULL) {
+            printf("h_node error");
             ret = ERR_AVL_OP_FAILED;
             goto out;
         }
@@ -618,6 +627,7 @@ sim_add_individual_to_pixel(sim_t *self, unsigned int pixel, individual_t *ind)
     /* insert the id into this pixel */
     node = sim_alloc_avl_set_node(self, id);
     if (avl_insert_node(&self->P[pixel], node) == NULL) {
+        printf("add_individual_to_pixel error");
         ret = ERR_AVL_OP_FAILED;
         goto out;
     }
@@ -725,6 +735,7 @@ sim_initialise(sim_t *self)
                 goto out;
             }
             if (avl_insert_node(&ind->ancestry, node) == NULL) {
+                printf("Initialise error");
                 ret = ERR_AVL_OP_FAILED;
                 goto out;
             }
@@ -892,6 +903,7 @@ out:
  * Generates parental individuals and inserts them into the parent
  * buffer based on the individuals in the child_buffer. 
  */
+
 static int 
 sim_generate_parents(sim_t *self)
 {
@@ -943,6 +955,172 @@ out:
     return ret;
 }
 
+/* 
+ * Generates parental individuals and inserts them into the parent
+ * buffer based on the individuals in the child_buffer.
+ */
+
+static int 
+sim_generate_arg_parents(sim_t *self, unsigned int num_parents) 
+{
+    int ret = 0;
+    unsigned int j, parent, num_children;
+    double site_1, site_2, total_rate;
+    individual_t **C = self->child_buffer;
+    avl_node_t *node;
+    int_map_value_t *locus_mapping;
+    unsigned int gap_no = avl_count(&C[0]->ancestry) - 1;
+    /*
+     * We set a default value for the recombination break point that will not
+     * be hit by coancestry events. A recombination event will overwrite it to
+     * a nonnegative value below.
+     */
+    int i, break_point = -2;
+    double *recomb_rates = NULL;
+    recomb_rates = xmalloc(gap_no * sizeof(double));
+    for (j = 0; j < num_parents; j++) {
+        self->parent_buffer[j] = sim_alloc_individual(self);
+        if (self->parent_buffer[j] == NULL) {
+            ret = ERR_OUT_OF_INDIVIDUALS;
+            goto out;
+        }
+    }
+    /* In case of a recombination event in the Kingman phase
+     * we require exactly one recombination point.
+     */
+    if (num_parents == 2) {
+        i = 0;
+        node = C[0]->ancestry.head;
+        locus_mapping = (int_map_value_t *) node->item;
+        site_2 = (double) locus_mapping->key;
+        node = node->next;
+        total_rate = 0.0;
+        while (node != NULL) {
+            site_1 = site_2;
+            locus_mapping = (int_map_value_t *) node->item;
+            site_2 = (double) locus_mapping->key;
+            recomb_rates[i] = site_2 - site_1;
+            total_rate += recomb_rates[i];
+            i++;
+            node = node->next;
+        } 
+        for (j = 0; j < gap_no; j++) {
+            recomb_rates[j] /= total_rate;
+        }
+        break_point = probability_list_select(recomb_rates, gap_no, 
+            gsl_rng_uniform(self->rng));
+    }
+    num_children = 3 - num_parents;
+    for (j = 0; j < num_children; j++) {
+        /* Assign the parent for the first locus */
+        parent = gsl_rng_uniform_int(self->rng, num_parents);
+        node = C[j]->ancestry.head;
+        assert(node != NULL);
+        locus_mapping = (int_map_value_t *) node->item;
+        ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
+                locus_mapping->value);
+        if (ret != 0) {
+            goto out;
+        }
+        i = 0;
+        while (node->next != NULL) {
+            i++;
+            node = node->next; 
+            assert(node != NULL);
+            locus_mapping = (int_map_value_t *) node->item;
+            if (i == break_point + 1) {
+                parent = (parent + 1) % 2;
+            }
+            ret = sim_update_parental_ancestry(self, parent, locus_mapping->key,
+                    locus_mapping->value);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        /* Now free the ancestry nodes */
+        for (node = C[j]->ancestry.head; node != NULL; node = node->next) {
+            sim_free_avl_int_map_node(self, node);
+        }
+    }
+out:
+    if (recomb_rates != NULL) {
+        free(recomb_rates);
+    }
+    return ret;
+}
+
+/*
+ * Completes a panmictic merger of two lineages into an ancestor
+ */
+
+static int
+sim_arg_coancestry_event(sim_t *self) 
+{
+    int ret = 0;
+    unsigned int i, j, k, num_parents = 1, num_children = 2;
+    ret = sim_generate_arg_parents(self, num_parents);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_children; j++) {
+        ret = sim_remove_individual(self, self->child_buffer[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (i = 0; i < self->dimension; i++) {
+        self->parent_buffer[0]->location[i] = 0.0;
+    }
+    ret = sim_add_individual(self, self->parent_buffer[0]);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Clear the coalescence markers */
+    for (j = 1; j <= self->coalesced_loci[0]; j++) {
+        k = self->coalesced_loci[j];
+        self->coalescence_map[k] = 0;
+    }
+    self->coalesced_loci[0] = 0;
+out:
+    return ret;
+}
+
+/*
+ * Completes a panmictic recombination of a lineage splitting into two ancestors
+ */
+
+static int
+sim_arg_recombination_event(sim_t *self) 
+{
+    int ret = 0;
+    unsigned int i, j, k, num_parents = 2;
+    individual_t *ind;
+    ret = sim_generate_arg_parents(self, num_parents);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sim_remove_individual(self, self->child_buffer[0]);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_parents; j++) {
+        ind = self->parent_buffer[j];
+        for (i = 0; i < self->dimension; i++) {
+            ind->location[i] = 0.0;
+        }
+        ret = sim_add_individual(self, ind);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 1; j <= self->coalesced_loci[0]; j++) {
+        k = self->coalesced_loci[j];
+        self->coalescence_map[k] = 0;
+    }
+    self->coalesced_loci[0] = 0;
+out:
+    return ret;
+}
 
 /* 
  * Completes an event centred on z with radius r, assuming that the 
@@ -991,9 +1169,6 @@ sim_complete_event(sim_t *self, double *z, double r)
 out:
     return ret;
 }
-
-
-
 
 /* 
  * Simulates a non-reproduction event.
@@ -1181,7 +1356,132 @@ out:
     return ret;
 }
 
+int
+sim_simulate_arg(sim_t *self) 
+{
+    int ret = 0;
+    double recomb_rate, coal_rate, total_rate; 
+    individual_t **S = self->intersected_buffer;
+    unsigned int S_size, n, i, last_locus, first_locus;
+    avl_node_t *node;
+    uintptr_t int_ptr;
+    uint64_t id;
+    individual_t *ind;
+    double *recomb_rates = NULL;
+		n = ((set_map_value_t *)self->Q.head->item)->key;
+    while (n > 1) {
+        recomb_rates = realloc(recomb_rates, n * sizeof(double));
+        coal_rate = 2.0 * self->Ne * gsl_sf_choose(n, 2);
+        recomb_rate = 0.0;
+        S_size = 0;
+        for (node = self->P[0].head; node != NULL; node = node->next) {
+            id = *((uint64_t *) node->item);
+            int_ptr = (uintptr_t) id;
+            ind = (individual_t *) int_ptr;
+            last_locus = ((set_map_value_t *)ind->ancestry.tail->item)->key;
+            first_locus = ((set_map_value_t *)ind->ancestry.head->item)->key;
+            recomb_rates[S_size] = (double)(last_locus - first_locus) * self->rho;
+            recomb_rate += recomb_rates[S_size];
+            S[S_size] = ind;
+            S_size++;
+        }
+        total_rate = coal_rate + recomb_rate;
+        self->time += gsl_ran_exponential(self->rng, 1.0 / total_rate);
+        if (gsl_rng_uniform(self->rng) < coal_rate / total_rate) {
+            gsl_ran_choose(self->rng, self->child_buffer, 2, S, S_size,
+                sizeof(individual_t *));
+            ret = sim_arg_coancestry_event(self);
+            if (ret != 0) {
+                goto out;
+            }
+        } else {
+            for (i = 0; i < S_size; i++) {
+                recomb_rates[i] /= recomb_rate;
+            }
+            self->child_buffer[0] = S[probability_list_select(recomb_rates, n, 
+                gsl_rng_uniform(self->rng))];
+            ret = sim_arg_recombination_event(self);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        n = ((set_map_value_t *)self->Q.head->item)->key;
+    }
+out:
+    if (recomb_rates != NULL) {
+        free(recomb_rates);
+    }
+    return ret;
+}
 
+/* 
+ * Moves the whole population into the first pixel for the panmictic Kingman
+ * phase of simulation
+ */
+int
+sim_setup_arg(sim_t *self)
+{
+    double ret = 0;
+    avl_node_t *node;
+    uintptr_t int_ptr;
+    uint64_t id;
+		int_map_value_t *locus_mapping;
+    individual_t *ind;
+    individual_t **C = self->child_buffer;
+    unsigned int i, j, k, buffer_size;
+    for (j = 0; j < self->N * self->N; j++) {
+        buffer_size = 0;
+        for (node = self->P[j].head; node != NULL; node = node->next) {
+            id = *((uint64_t *) node->item);
+            int_ptr = (uintptr_t) id;
+            ind = (individual_t *) int_ptr;
+            C[buffer_size] = ind;
+            buffer_size++;
+        }
+        for (i = 0; i < buffer_size; i++) {
+            self->parent_buffer[0] = sim_alloc_individual(self);
+            node = C[i]->ancestry.head;
+            assert(node != NULL);
+            locus_mapping = (int_map_value_t *) node->item;
+            ret = sim_update_parental_ancestry(self, 0, locus_mapping->key,
+                    locus_mapping->value);
+            if (ret != 0) {
+                goto out;
+            }
+            while (node->next != NULL) {
+                node = node->next; 
+                locus_mapping = (int_map_value_t *) node->item;
+                ret = sim_update_parental_ancestry(self, 0, locus_mapping->key,
+                        locus_mapping->value);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            for (node = C[i]->ancestry.head; node != NULL; node = node->next) {
+                sim_free_avl_int_map_node(self, node);
+            }
+            ret = sim_remove_individual(self, C[i]);
+            if (ret != 0) {
+                goto out;
+            }
+            ind = self->parent_buffer[0];
+            for (k = 0; k < self->dimension; k++) {
+                ind->location[k] = 0.0;
+            }
+            ret = sim_add_individual(self, ind);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        for (i = 1; i <= self->coalesced_loci[0]; i++) {
+            k = self->coalesced_loci[i];
+            self->coalescence_map[k] = 0;
+        }
+        self->coalesced_loci[0] = 0;
+    }
+out:
+    return ret;
+}
 
 int
 sim_get_population(sim_t *self, avl_tree_t *pop)
@@ -1205,6 +1505,7 @@ sim_get_population(sim_t *self, avl_tree_t *pop)
             }
         }
     }
+    printf("Get pop: %d, %d\n", avl_count(pop), self->population_size);
     assert(avl_count(pop) == self->population_size);
 out: 
     return ret;
@@ -1239,6 +1540,8 @@ sim_print_parameters(sim_t *self)
         printf("# \tr = %f\n", self->event_classes[j].r);
         printf("# \trate = %f\n", self->event_classes[j].rate);
     }
+    printf("# Kingman Ne = %f\n", self->Ne);
+		printf("# Kingman rho = %f\n", self->rho);
     printf("# sample = ");
     for (j = 0; j < self->sample_size; j++) {
         x = self->sample + 2 * j;
@@ -1336,7 +1639,7 @@ sim_print_state(sim_t *self, int detail)
         printf("Memory:\n");
         printf("\tavl_set_node_heap_top =            %d\n", 
                 self->avl_set_node_heap_top);
-        printf("\tindividual_heap_top = %d\n", 
+        printf("\tindividual_heap_top =              %d\n", 
                 self->individual_heap_top);
         printf("\tavl_set_map_node_heap_top =        %d\n", 
                 self->avl_set_map_node_heap_top);
