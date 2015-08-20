@@ -591,7 +591,6 @@ sim_remove_pixel_from_occupancy(sim_t *self, unsigned int h, unsigned int pixel)
         smv_search.key = h;
         q_node = avl_search(&self->Q, &smv_search);
         if (q_node == NULL) {
-            printf("q_node error");
             ret = ERR_AVL_OP_FAILED;
             goto out;
         }
@@ -601,7 +600,6 @@ sim_remove_pixel_from_occupancy(sim_t *self, unsigned int h, unsigned int pixel)
         set_value = (uint64_t) pixel;
         h_node = avl_search(tree, &set_value);
         if (h_node == NULL) {
-            printf("h_node error");
             ret = ERR_AVL_OP_FAILED;
             goto out;
         }
@@ -978,6 +976,10 @@ sim_generate_arg_parents(sim_t *self, unsigned int num_parents)
     int i, break_point = -2;
     double *recomb_rates = NULL;
     recomb_rates = xmalloc(gap_no * sizeof(double));
+    if (recomb_rates == NULL) {
+        ret = ERR_NO_MEMORY;
+        goto out;
+    }
     for (j = 0; j < num_parents; j++) {
         self->parent_buffer[j] = sim_alloc_individual(self);
         if (self->parent_buffer[j] == NULL) {
