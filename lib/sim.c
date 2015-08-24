@@ -173,7 +173,8 @@ index_to_pixel_coord(int index, unsigned int N, unsigned int *v)
 double
 beta(int n, int k, double u)
 {
-    double ret = exp(gsl_sf_lnchoose(n, k) + (double)(k) * log(u) + (double)(n - k) * log(1.0 - u));
+    double ret = exp(gsl_sf_lnchoose(n, k) + (double)(k) * log(u) 
+        + (double)(n - k) * log(1.0 - u));
     ret /= 1.0 - gsl_pow_int(1.0 - u, n);
     return ret;
 }
@@ -216,15 +217,6 @@ get_pixels_general(double r, double pixel_size, int N, double *z, unsigned int *
     int x_max = (int) ceil((z[0] + r) / pixel_size);
     int y_min = (int) floor((z[1] - r) / pixel_size);
     int y_max = (int) ceil((z[1] + r) / pixel_size);
-    /* We prevent wrapping around onto the same pixel more than once in the case
-    * of only one pixel, which happens in the Kingman simulation.
-    */
-    if (N == 1) {
-        x_min = 0;
-        x_max = 0;
-        y_min = 0;
-        y_max = 0;
-    }
     int x, y;
     int coord[2];
     p[0] = 0;
@@ -233,7 +225,6 @@ get_pixels_general(double r, double pixel_size, int N, double *z, unsigned int *
             if (disc_intersects_pixel(z, x, y, r, pixel_size)) {
                 coord[0] = (N + x) % N;
                 coord[1] = (N + y) % N;
-                //printf("generated: %d %d\n", coord[0], coord[1]);
                 p[0]++; 
                 p[p[0]] = pixel_coord_to_index(coord[0], coord[1], N);
             }
@@ -625,7 +616,6 @@ sim_add_individual_to_pixel(sim_t *self, unsigned int pixel, individual_t *ind)
     /* insert the id into this pixel */
     node = sim_alloc_avl_set_node(self, id);
     if (avl_insert_node(&self->P[pixel], node) == NULL) {
-        printf("add_individual_to_pixel error");
         ret = ERR_AVL_OP_FAILED;
         goto out;
     }
@@ -733,7 +723,6 @@ sim_initialise(sim_t *self)
                 goto out;
             }
             if (avl_insert_node(&ind->ancestry, node) == NULL) {
-                printf("Initialise error");
                 ret = ERR_AVL_OP_FAILED;
                 goto out;
             }
@@ -1507,7 +1496,6 @@ sim_get_population(sim_t *self, avl_tree_t *pop)
             }
         }
     }
-    printf("Get pop: %d, %d\n", avl_count(pop), self->population_size);
     assert(avl_count(pop) == self->population_size);
 out: 
     return ret;
