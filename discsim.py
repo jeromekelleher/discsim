@@ -43,18 +43,26 @@ class Simulator(object):
     pedigree ancestors of the sample; otherwise, simulate the locations
     and ancestry of the genetic ancestors of the sample over muliple
     loci.
+    
+    If ``simulate_kingman`` is ``True``, a homogeneous Ancestral Recombination
+    Graph is simulated on the ancestral sample after a specified number of
+    generations.
     """
-    def __init__(self, torus_diameter, simulate_pedigree=False):
+    def __init__(self, torus_diameter, simulate_pedigree=False, 
+                 simulate_kingman=False):
         """
         Allocates a new simulator object on a torus of the specified diameter.
         """
         self.torus_diameter = torus_diameter
         self.simulate_pedigree = simulate_pedigree
+        self.simulate_kingman = simulate_kingman
         self.sample = None
         self.event_classes = None
         self.num_parents = None
         self.num_loci = None
         self.recombination_probability = None
+        self.r = None
+        self.Ne = None
         self.max_occupancy = None
         self.max_population_size = None
         self.pixel_size = None
@@ -70,6 +78,10 @@ class Simulator(object):
         """
         if self.recombination_probability is None:
             self.recombination_probability = 0.5
+        if self.r is None:
+            self.r = 1e-8
+        if self.Ne is None:
+            self.Ne = 20000
         if self.num_loci is None:
             self.num_loci = 1
         if self.random_seed is None:
@@ -148,8 +160,9 @@ class Simulator(object):
                     num_loci=self.num_loci, torus_diameter=self.torus_diameter,
                     pixel_size=self.pixel_size, random_seed=self.random_seed,
                     recombination_probability=self.recombination_probability,
-                    num_parents=self.num_parents,
+                    r = self.r, Ne = self.Ne, num_parents=self.num_parents,
                     simulate_pedigree=int(self.simulate_pedigree),
+                    simulate_kingman=int(self.simulate_kingman),
                     max_population_size=self.max_population_size,
                     max_occupancy=self.max_occupancy, dimension=self.dimension)
 
@@ -238,6 +251,7 @@ class Simulator(object):
         """
         print("torus_diameter = ", self.torus_diameter)
         print("simulate_pedigree = ", self.simulate_pedigree)
+        print("simulate_kingman = ", self.simulate_kingman)
         print("sample = ", len(self.sample) - 1)
         print("event_classes = ", len(self.event_classes))
         for ec in self.event_classes:
@@ -245,6 +259,8 @@ class Simulator(object):
         print("num_parents = ", self.num_parents)
         print("num_loci = ", self.num_loci)
         print("recombination_probability = ", self.recombination_probability)
+        print("Ne = ", self.Ne)
+        print("r = ", self.r)
         print("max_occupancy = ", self.max_occupancy)
         print("max_population_size = ", self.max_population_size)
         print("pixel_size = ", self.pixel_size)
