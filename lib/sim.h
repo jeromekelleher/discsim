@@ -62,11 +62,9 @@ typedef struct {
      * number of spatial generations
      */
     int simulate_kingman; 
-    /* number of generations to simulate before transitioning to the ARG
-     * simulation
-     */
+    /* Kingman simulation parameters */
     double Ne;
-    double rho;
+    double r;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;

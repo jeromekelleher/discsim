@@ -262,6 +262,79 @@ def wave_1d(u, num_loci=0):
         pyplot.plot(x, n)
     pyplot.axhline(0.797 * N)
     pyplot.show()
+    
+def subprocess_structure_worker(args):
+    sim, max_time, seed = args
+    sim.random_seed = seed
+    before = time.time()
+    sim.run(max_time)
+    sim.print_state()
+    sim.reset()
+    after = time.time() - before
+    return after
+
+def run_structure_replicates(sim, n_reps, max_time, worker_pool=None):
+    args = [(sim, max_time, random.randint(1, 2**31)) for j in range(n_reps)]
+    if worker_pool is None:
+        replicates = [subprocess_structure_worker(a) for a in args]
+    else:
+        replicates = worker_pool.map(subprocess_structure_worker, args)
+    mean_time = np.mean(np.array(replicates), axis=0)
+    return mean_time
+    
+def fine_structure():
+    rep_num = 1 # number of simulations over which to average runtimes
+    sample_size = 4 # number of sampled lineages
+    num_loci = 10 # number of loci per lineage
+    Ne = 2 * 10**4 # effective human population size
+    # We fix recombination probability by moment matching to human chr 22:
+    # Chr 22 has ~ 5e7 loci with recombination probability 1e-8.
+    # Thus we expect 0.5 recombinations per reproduction event.
+    # rho = 1 / (2 num_loci) gives the same expectation for our locus count.
+    rho = 1 / (2 * num_loci)
+    r = 1 # event raduius normalised to 1
+    gen_no = 10**4 # number of generations to simulate
+    
+    # Variance of lineage displacement per unit time = u pi r^4 / 2.
+    # Time per generation = 1 / (u pi r^2).
+    # Combining these yields:
+    sigma2 = r**2 / 2 # lineage displacement variance per generation
+    
+    # Equating mixing time of Brownian motion on torus of side length L
+    # and lineage displacement variance over gen_no generations:
+    # L^2 log L = sigma2 gen_no
+    # yields torus side length with reasonable wrap around probability.
+    # Ignore log L correction for simplicity and round down to an even integer.
+    L = math.sqrt(gen_no * sigma2)
+    L = L - L % 2
+    
+    # 2 * Ne * pi * sigma2 = Wrights neighbouhood size = 2 / u
+    # Thus the migration rate is a = 2 / u log L (c.f. Theorem 5.13 of
+    # Durrett, Probability models for DNA sequence evolution).
+    # By Theorem 5.12 of Durrett, Ne = (1 + a) L^2 log L / (2 pi sigma2).
+    # Substituting in for a and solving for u yields
+    u = 2 * L**2 / (2 * Ne * math.pi * sigma2 - L**2 * math.log(L))
+    
+    gen_time = 1 / (math.pi * r**2 * u) # time per generation
+    # total time for gen_no generations scaled for total event rate 1.
+    max_time = gen_no * gen_time * L**2
+    s = discsim.Simulator(L, False, True)
+    s.num_loci = num_loci
+    s.recombination_probability = rho
+    s.r = 1 / (num_loci * Ne) #ARG recombination rate moment matched to rho
+    s.Ne = Ne
+    s.max_population_size = sample_size * num_loci + 2
+    s.sample = [None] + [(random.random()*L, random.random()*L) for j in range(sample_size)]
+    s.event_classes = [ercs.DiscEventClass(r=1, u=u)]
+    #print(run_structure_replicates(s, rep_num, max_time, None))
+    #workers = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    #print(run_structure_replicates(s, rep_num, max_time, workers))
+    s.run(max_time)
+    s.print_state()
+    pop = s.get_population()
+    for entry in pop:
+        print(entry[0][0], entry[0][1], entry[1])
+    return 1
 
 def main():
     #simple_identity_check(rate=0.5)
@@ -270,8 +343,9 @@ def main():
     #mixed_events_identity_check(100000)
     #plot_mixed_events_identity()
     #single_locus_diffusion(u=0.0000125, r=1, rate=1.0)
-    wave_1d(u=0.005)
+    #wave_1d(u=0.005)
     #wave_1d(u=0.005, num_loci=100000)
+    fine_structure()
 
 if __name__ == "__main__":
     main()

@@ -242,9 +242,9 @@ read_sim_config(sim_t *self, const char *filename)
                 &self->recombination_probability) == CONFIG_FALSE) {
         fatal_error("recombination_probability is a required parameter");
     }
-    if (config_lookup_float(config, "rho", 
-                &self->rho) == CONFIG_FALSE) {
-        fatal_error("rho is a required parameter");
+    if (config_lookup_float(config, "r", 
+                &self->r) == CONFIG_FALSE) {
+        fatal_error("r is a required parameter");
     }
     if (config_lookup_float(config, "Ne", 
                 &self->Ne) == CONFIG_FALSE) {

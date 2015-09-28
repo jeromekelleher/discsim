@@ -1362,7 +1362,7 @@ sim_simulate_arg(sim_t *self)
 		n = ((set_map_value_t *)self->Q.head->item)->key;
     while (n > 1) {
         recomb_rates = realloc(recomb_rates, n * sizeof(double));
-        coal_rate = 2.0 * self->Ne * gsl_sf_choose(n, 2);
+        coal_rate = gsl_sf_choose(n, 2);
         recomb_rate = 0.0;
         S_size = 0;
         for (node = self->P[0].head; node != NULL; node = node->next) {
@@ -1371,7 +1371,8 @@ sim_simulate_arg(sim_t *self)
             ind = (individual_t *) int_ptr;
             last_locus = ((set_map_value_t *)ind->ancestry.tail->item)->key;
             first_locus = ((set_map_value_t *)ind->ancestry.head->item)->key;
-            recomb_rates[S_size] = (double)(last_locus - first_locus) * self->rho;
+            recomb_rates[S_size] = (double)(last_locus - first_locus) 
+                * self->Ne * self->r;
             recomb_rate += recomb_rates[S_size];
             S[S_size] = ind;
             S_size++;
@@ -1531,7 +1532,7 @@ sim_print_parameters(sim_t *self)
         printf("# \trate = %f\n", self->event_classes[j].rate);
     }
     printf("# Kingman Ne = %f\n", self->Ne);
-		printf("# Kingman rho = %f\n", self->rho);
+		printf("# Kingman r = %f\n", self->r);
     printf("# sample = ");
     for (j = 0; j < self->sample_size; j++) {
         x = self->sample + 2 * j;
