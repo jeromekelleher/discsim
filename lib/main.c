@@ -242,13 +242,13 @@ read_sim_config(sim_t *self, const char *filename)
                 &self->recombination_probability) == CONFIG_FALSE) {
         fatal_error("recombination_probability is a required parameter");
     }
-    if (config_lookup_float(config, "rho", 
-                &self->rho) == CONFIG_FALSE) {
-        fatal_error("rho is a required parameter");
+    if (config_lookup_float(config, "arg_recombination_rate", 
+                &self->arg_recombination_rate) == CONFIG_FALSE) {
+        fatal_error("arg_recombination_rate is a required parameter");
     }
-    if (config_lookup_float(config, "Ne", 
-                &self->Ne) == CONFIG_FALSE) {
-        fatal_error("Ne is a required parameter");
+    if (config_lookup_float(config, "arg_effective_population_size", 
+                &self->arg_effective_population_size) == CONFIG_FALSE) {
+        fatal_error("arg_effective_population_size is a required parameter");
     }
 
     self->event_classes = read_events(config, &self->num_event_classes);    

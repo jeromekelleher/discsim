@@ -270,6 +270,10 @@ Simulator_check_input(Simulator *self)
         handle_input_error("simulate_pedigree must be 0 or 1");
         goto out;
     }
+    if (sim->simulate_kingman < 0 || sim->simulate_kingman > 1) {
+        handle_input_error("simulate_kingman must be 0 or 1");
+        goto out;
+    }
     if (sim->simulate_pedigree == 1 && sim->num_loci != 1) {
         handle_input_error("m must be 1 for pedigree simulation");
         goto out;
@@ -294,9 +298,17 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have max_occupancy > 0");
         goto out;
     }
-    if (sim->recombination_probability < 0 || 
-            sim->recombination_probability > 1) {
+    if (sim->recombination_probability < 0.0 || 
+            sim->recombination_probability > 1.0) {
         handle_input_error("must have 0 <= recombination_probability <= 1");
+        goto out;
+    }
+    if (sim->arg_recombination_rate < 0.0) {
+        handle_input_error("must have arg_recombination_rate >= 0");
+        goto out;
+    }
+    if (sim->arg_effective_population_size <= 0.0) {
+        handle_input_error("must have arg_effective_population_size > 0");
         goto out;
     }
     if (sim->pixel_size <= 0 || sim->pixel_size > sim->torus_diameter / 4) {
@@ -322,7 +334,7 @@ Simulator_check_input(Simulator *self)
             goto out;
         }
         if (e->rate <= 0.0) {
-            handle_input_error("must have 0 < rate < 1");
+            handle_input_error("must have rate > 0");
             goto out;
         }
     }
@@ -338,8 +350,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"sample", "event_classes", "num_loci", 
             "num_parents", "max_population_size", "max_occupancy", 
-            "dimension", "simulate_pedigree", "random_seed", "torus_diameter",
-            "pixel_size", "recombination_probability", NULL}; 
+            "dimension", "simulate_pedigree", "simulate_kingman", 
+            "random_seed", "torus_diameter", "pixel_size", 
+            "recombination_probability", "arg_recombination_rate", 
+            "arg_effective_population_size", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
     self->sim = sim; 
@@ -352,19 +366,23 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->torus_diameter = 1000;
     sim->pixel_size = 2;
     sim->recombination_probability = 0.5;
+    sim->arg_effective_population_size = 20000.0;
+    sim->arg_recombination_rate = 1.0 / 20000.0;
     sim->random_seed = 1;
     sim->max_population_size = 1000;
     sim->max_occupancy = 10;
     sim->dimension = 2;
     sim->simulate_pedigree = 0;
+    sim->simulate_kingman = 0;
     sim->max_time = DBL_MAX;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIIkddd", kwlist, 
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIIIkddddd", kwlist, 
             &PyList_Type, &sample, 
             &PyList_Type, &events, 
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
             &sim->max_occupancy, &sim->dimension, &sim->simulate_pedigree,
-            &sim->random_seed, &sim->torus_diameter, &sim->pixel_size, 
-            &sim->recombination_probability)) {
+            &sim->simulate_kingman, &sim->random_seed, &sim->torus_diameter,
+            &sim->pixel_size, &sim->recombination_probability, 
+            &sim->arg_recombination_rate, &sim->arg_effective_population_size)) {
         goto out;
     }
     if (Simulator_parse_sample(self, sample) != 0) {
@@ -441,6 +459,18 @@ Simulator_get_simulate_pedigree(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("I", self->sim->simulate_pedigree);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_simulate_kingman(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->simulate_kingman);
 out:
     return ret; 
 }
@@ -527,6 +557,30 @@ Simulator_get_num_reproduction_events(Simulator  *self)
     }
     ret = Py_BuildValue("K", 
             (unsigned long long) self->sim->num_reproduction_events);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_arg_recombination_rate(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->arg_recombination_rate);
+out:
+    return ret; 
+}
+
+static PyObject *
+Simulator_get_arg_effective_population_size(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->arg_effective_population_size);
 out:
     return ret; 
 }
@@ -785,6 +839,18 @@ Simulator_run(Simulator *self, PyObject *args)
             goto out;
         }
     }
+    if (self->sim->simulate_kingman == 1) {
+        status = sim_setup_arg(self->sim);
+        if (status < 0) {
+            handle_library_error(status);
+            goto out;
+        }
+        status = sim_simulate_arg(self->sim);
+        if (status < 0) {
+            handle_library_error(status);
+            goto out;
+        }
+    }
     /* return True if complete coalescence has occured */
     ret = self->sim->time < max_time ? Py_True : Py_False;
     Py_INCREF(ret);
@@ -801,6 +867,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the dimension of the simulation." },
     {"get_simulate_pedigree", (PyCFunction) Simulator_get_simulate_pedigree, METH_NOARGS, 
             "Returns 1 if we are simulating the pedigree; 0 otherwise." },
+    {"get_simulate_kingman", (PyCFunction) Simulator_get_simulate_kingman, METH_NOARGS, 
+            "Returns 1 if we are simulating the ARG after a spatial simulation; 0 otherwise." },
     {"get_max_population_size", (PyCFunction) Simulator_get_max_population_size, 
             METH_NOARGS, 
             "Returns the maximum size of the ancestral population"},
@@ -821,6 +889,10 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_probability", 
             (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS, 
             "Returns the probability of recombination between adjacent loci" },
+    {"get_r", (PyCFunction) Simulator_get_arg_recombination_rate, METH_NOARGS, 
+            "Returns the per-locus per-generation ARG recombination rate " },
+    {"get_Ne", (PyCFunction) Simulator_get_arg_effective_population_size, METH_NOARGS, 
+            "Returns the ARG effective population size " },
     {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS, 
             "Returns the event classes" },
     {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS, 
