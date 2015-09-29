@@ -63,8 +63,8 @@ typedef struct {
      */
     int simulate_kingman; 
     /* Kingman simulation parameters */
-    double Ne;
-    double r;
+    double arg_effective_population_size;
+    double arg_recombination_rate;
     /* Events */ 
     unsigned int num_event_classes;
     event_class_t *event_classes;

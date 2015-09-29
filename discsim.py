@@ -61,8 +61,8 @@ class Simulator(object):
         self.num_parents = None
         self.num_loci = None
         self.recombination_probability = None
-        self.r = None
-        self.Ne = None
+        self.arg_recombination_rate = None
+        self.arg_effective_population_size = None
         self.max_occupancy = None
         self.max_population_size = None
         self.pixel_size = None
@@ -78,10 +78,10 @@ class Simulator(object):
         """
         if self.recombination_probability is None:
             self.recombination_probability = 0.5
-        if self.r is None:
-            self.r = 1e-8
-        if self.Ne is None:
-            self.Ne = 20000
+        if self.arg_recombination_rate is None:
+            self.arg_recombination_rate = 1e-8
+        if self.arg_effective_population_size is None:
+            self.arg_effective_population_size = 20000
         if self.num_loci is None:
             self.num_loci = 1
         if self.random_seed is None:
@@ -160,7 +160,9 @@ class Simulator(object):
                     num_loci=self.num_loci, torus_diameter=self.torus_diameter,
                     pixel_size=self.pixel_size, random_seed=self.random_seed,
                     recombination_probability=self.recombination_probability,
-                    r = self.r, Ne = self.Ne, num_parents=self.num_parents,
+                    arg_recombination_rate = self.arg_recombination_rate, 
+                    arg_effective_population_size = self.arg_effective_population_size,
+                    num_parents=self.num_parents,
                     simulate_pedigree=int(self.simulate_pedigree),
                     simulate_kingman=int(self.simulate_kingman),
                     max_population_size=self.max_population_size,
@@ -259,8 +261,8 @@ class Simulator(object):
         print("num_parents = ", self.num_parents)
         print("num_loci = ", self.num_loci)
         print("recombination_probability = ", self.recombination_probability)
-        print("Ne = ", self.Ne)
-        print("r = ", self.r)
+        print("arg_effective_population_size = ", self.arg_effective_population_size)
+        print("arg_recombination_rate = ", self.arg_recombination_rate)
         print("max_occupancy = ", self.max_occupancy)
         print("max_population_size = ", self.max_population_size)
         print("pixel_size = ", self.pixel_size)

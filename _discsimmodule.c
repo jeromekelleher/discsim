@@ -303,12 +303,12 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have 0 <= recombination_probability <= 1");
         goto out;
     }
-    if (sim->r < 0.0) {
-        handle_input_error("must have r >= 0");
+    if (sim->arg_recombination_rate < 0.0) {
+        handle_input_error("must have arg_recombination_rate >= 0");
         goto out;
     }
-    if (sim->Ne < 0.0) {
-        handle_input_error("must have Ne > 0");
+    if (sim->arg_effective_population_size <= 0.0) {
+        handle_input_error("must have arg_effective_population_size > 0");
         goto out;
     }
     if (sim->pixel_size <= 0 || sim->pixel_size > sim->torus_diameter / 4) {
@@ -352,7 +352,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             "num_parents", "max_population_size", "max_occupancy", 
             "dimension", "simulate_pedigree", "simulate_kingman", 
             "random_seed", "torus_diameter", "pixel_size", 
-            "recombination_probability", "r", "Ne", NULL}; 
+            "recombination_probability", "arg_recombination_rate", 
+            "arg_effective_population_size", NULL}; 
     PyObject *sample, *events;
     sim_t *sim = PyMem_Malloc(sizeof(sim_t));
     self->sim = sim; 
@@ -365,8 +366,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->torus_diameter = 1000;
     sim->pixel_size = 2;
     sim->recombination_probability = 0.5;
-    sim->Ne = 20000.0;
-    sim->r = 1.0 / 20000.0;
+    sim->arg_effective_population_size = 20000.0;
+    sim->arg_recombination_rate = 1.0 / 20000.0;
     sim->random_seed = 1;
     sim->max_population_size = 1000;
     sim->max_occupancy = 10;
@@ -380,8 +381,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
             &sim->max_occupancy, &sim->dimension, &sim->simulate_pedigree,
             &sim->simulate_kingman, &sim->random_seed, &sim->torus_diameter,
-            &sim->pixel_size, &sim->recombination_probability, &sim->r, 
-            &sim->Ne)) {
+            &sim->pixel_size, &sim->recombination_probability, 
+            &sim->arg_recombination_rate, &sim->arg_effective_population_size)) {
         goto out;
     }
     if (Simulator_parse_sample(self, sample) != 0) {
@@ -561,25 +562,25 @@ out:
 }
 
 static PyObject *
-Simulator_get_r(Simulator *self)
+Simulator_get_arg_recombination_rate(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->r);
+    ret = Py_BuildValue("d", self->sim->arg_recombination_rate);
 out:
     return ret; 
 }
 
 static PyObject *
-Simulator_get_Ne(Simulator *self)
+Simulator_get_arg_effective_population_size(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->Ne);
+    ret = Py_BuildValue("d", self->sim->arg_effective_population_size);
 out:
     return ret; 
 }
@@ -888,10 +889,10 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_probability", 
             (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS, 
             "Returns the probability of recombination between adjacent loci" },
-    {"get_r", (PyCFunction) Simulator_get_r, METH_NOARGS, 
+    {"get_r", (PyCFunction) Simulator_get_arg_recombination_rate, METH_NOARGS, 
             "Returns the per-locus per-generation ARG recombination rate " },
-    {"get_Ne", (PyCFunction) Simulator_get_Ne, METH_NOARGS, 
-            "Returns the ARG efective population size " },
+    {"get_Ne", (PyCFunction) Simulator_get_arg_effective_population_size, METH_NOARGS, 
+            "Returns the ARG effective population size " },
     {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS, 
             "Returns the event classes" },
     {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS, 

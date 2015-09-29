@@ -1371,8 +1371,8 @@ sim_simulate_arg(sim_t *self)
             ind = (individual_t *) int_ptr;
             last_locus = ((set_map_value_t *)ind->ancestry.tail->item)->key;
             first_locus = ((set_map_value_t *)ind->ancestry.head->item)->key;
-            recomb_rates[S_size] = (double)(last_locus - first_locus) 
-                * self->Ne * self->r;
+            recomb_rates[S_size] = (double)(last_locus - first_locus) * 
+                self->arg_effective_population_size * self->arg_recombination_rate;
             recomb_rate += recomb_rates[S_size];
             S[S_size] = ind;
             S_size++;
@@ -1531,8 +1531,9 @@ sim_print_parameters(sim_t *self)
         printf("# \tr = %f\n", self->event_classes[j].r);
         printf("# \trate = %f\n", self->event_classes[j].rate);
     }
-    printf("# Kingman Ne = %f\n", self->Ne);
-		printf("# Kingman r = %f\n", self->r);
+    printf("# arg_effective_population_size = %f\n", 
+        self->arg_effective_population_size);
+    printf("# arg_recombination_rate = %f\n", self->arg_recombination_rate);
     printf("# sample = ");
     for (j = 0; j < self->sample_size; j++) {
         x = self->sample + 2 * j;

@@ -286,7 +286,7 @@ def fine_structure():
     rep_num = 1 # number of simulations over which to average runtimes
     sample_size = 4 # number of sampled lineages
     num_loci = 10 # number of loci per lineage
-    Ne = 2 * 10**4 # effective human population size
+    arg_effective_population_size = 2 * 10**4 # effective human population size
     # We fix recombination probability by moment matching to human chr 22:
     # Chr 22 has ~ 5e7 loci with recombination probability 1e-8.
     # Thus we expect 0.5 recombinations per reproduction event.
@@ -313,16 +313,17 @@ def fine_structure():
     # Durrett, Probability models for DNA sequence evolution).
     # By Theorem 5.12 of Durrett, Ne = (1 + a) L^2 log L / (2 pi sigma2).
     # Substituting in for a and solving for u yields
-    u = 2 * L**2 / (2 * Ne * math.pi * sigma2 - L**2 * math.log(L))
-    
+    u = 2 * L**2 / (2 * arg_effective_population_size * math.pi * sigma2 
+        - L**2 * math.log(L))
     gen_time = 1 / (math.pi * r**2 * u) # time per generation
     # total time for gen_no generations scaled for total event rate 1.
     max_time = gen_no * gen_time * L**2
     s = discsim.Simulator(L, False, True)
     s.num_loci = num_loci
     s.recombination_probability = rho
-    s.r = 1 / (num_loci * Ne) #ARG recombination rate moment matched to rho
-    s.Ne = Ne
+    #ARG recombination rate moment matched to rho
+    s.arg_recombination_rate = 1 / (num_loci * arg_effective_population_size) 
+    s.arg_effective_population_size = arg_effective_population_size
     s.max_population_size = sample_size * num_loci + 2
     s.sample = [None] + [(random.random()*L, random.random()*L) for j in range(sample_size)]
     s.event_classes = [ercs.DiscEventClass(r=1, u=u)]
