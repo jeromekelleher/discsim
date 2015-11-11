@@ -286,7 +286,13 @@ def fine_structure():
     rep_num = 1 # number of simulations over which to average runtimes
     sample_size = 4 # number of sampled lineages
     num_loci = 10 # number of loci per lineage
-    arg_effective_population_size = 2 * 10**4 # effective human population size
+
+    # Simulation assumes an effective population size of 
+    # 2 * arg_effective_population_size as opposed to 
+    # 4 * arg_effective_population_size. Multiply the parameter by 2 to correct
+    # if needed.
+    arg_effective_population_size = 10**4 # effective human population size    
+    
     # We fix recombination probability by moment matching to human chr 22:
     # Chr 22 has ~ 5e7 loci with recombination probability 1e-8.
     # Thus we expect 0.5 recombinations per reproduction event.
@@ -321,7 +327,7 @@ def fine_structure():
     s = discsim.Simulator(L, False, True)
     s.num_loci = num_loci
     s.recombination_probability = rho
-    #ARG recombination rate moment matched to rho
+    # ARG recombination rate moment matched to rho for sample_size = 2
     s.arg_recombination_rate = 1 / (num_loci * arg_effective_population_size) 
     s.arg_effective_population_size = arg_effective_population_size
     s.max_population_size = sample_size * num_loci + 2

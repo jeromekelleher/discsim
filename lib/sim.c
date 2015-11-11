@@ -1351,7 +1351,7 @@ int
 sim_simulate_arg(sim_t *self) 
 {
     int ret = 0;
-    double recomb_rate, coal_rate, total_rate; 
+    double recomb_rate, coal_rate, total_rate, time_step; 
     individual_t **S = self->intersected_buffer;
     unsigned int S_size, n, i, last_locus, first_locus;
     avl_node_t *node;
@@ -1371,14 +1371,20 @@ sim_simulate_arg(sim_t *self)
             ind = (individual_t *) int_ptr;
             last_locus = ((set_map_value_t *)ind->ancestry.tail->item)->key;
             first_locus = ((set_map_value_t *)ind->ancestry.head->item)->key;
-            recomb_rates[S_size] = (double)(last_locus - first_locus) * 
+            recomb_rates[S_size] = (double)(last_locus - first_locus) / 2.0 * 
                 self->arg_effective_population_size * self->arg_recombination_rate;
             recomb_rate += recomb_rates[S_size];
             S[S_size] = ind;
             S_size++;
         }
         total_rate = coal_rate + recomb_rate;
-        self->time += gsl_ran_exponential(self->rng, 1.0 / total_rate);
+        time_step = gsl_ran_exponential(self->rng, 1.0 / total_rate);
+        time_step *= 2.0 * self->arg_effective_population_size; // 2 Ne scaling
+        time_step /= self->event_classes[0].rate / (self->torus_diameter * 
+            self->torus_diameter); // correct for scaling of spatial process
+        time_step /= (self->event_classes[0].r * self->event_classes[0].r * 
+            M_PI *self->event_classes[0].u); // generation to model time
+        self->time += time_step;
         if (gsl_rng_uniform(self->rng) < coal_rate / total_rate) {
             gsl_ran_choose(self->rng, self->child_buffer, 2, S, S_size,
                 sizeof(individual_t *));
